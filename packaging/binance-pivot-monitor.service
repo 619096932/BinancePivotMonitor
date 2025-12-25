@@ -1,0 +1,17 @@
+[Unit]
+Description=Binance Pivot Monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=binance-pivot-monitor
+Group=binance-pivot-monitor
+WorkingDirectory=/var/lib/binance-pivot-monitor
+EnvironmentFile=-/etc/binance-pivot-monitor/binance-pivot-monitor.env
+ExecStart=/usr/bin/binance-pivot-monitor-run
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

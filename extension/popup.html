@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="popup.css" />
+  <title>Pivot Monitor</title>
+</head>
+
+<body>
+  <header class="header">
+    <div class="title">Pivot Monitor</div>
+    <div class="meta">
+      <span id="status" class="pill">unknown</span>
+      <button id="refreshBtn" class="btn" type="button">Refresh</button>
+      <button id="optionsBtn" class="btn" type="button">Settings</button>
+    </div>
+  </header>
+
+  <div class="controls">
+    <input id="search" class="input" type="text" placeholder="Search symbol (e.g. BTC)" />
+    <button id="jumpBtn" class="btn" type="button">Jump Chart</button>
+  </div>
+
+  <div class="filters">
+    <select id="period" class="select">
+      <option value="">All periods</option>
+      <option value="1d">1d</option>
+      <option value="1w">1w</option>
+    </select>
+    <select id="direction" class="select">
+      <option value="">All directions</option>
+      <option value="up">up</option>
+      <option value="down">down</option>
+    </select>
+  </div>
+
+  <div class="level-section">
+    <span class="level-label">Levels:</span>
+    <div class="level-btns" id="filterLevels">
+      <button type="button" data-level="R3">R3</button>
+      <button type="button" data-level="R4">R4</button>
+      <button type="button" data-level="R5">R5</button>
+      <button type="button" data-level="S3">S3</button>
+      <button type="button" data-level="S4">S4</button>
+      <button type="button" data-level="S5">S5</button>
+    </div>
+  </div>
+
+  <div class="level-section">
+    <span class="level-label">Sound:</span>
+    <div class="level-btns" id="soundLevels">
+      <button type="button" data-level="R3">R3</button>
+      <button type="button" data-level="R4" class="active">R4</button>
+      <button type="button" data-level="R5" class="active">R5</button>
+      <button type="button" data-level="S3">S3</button>
+      <button type="button" data-level="S4" class="active">S4</button>
+      <button type="button" data-level="S5" class="active">S5</button>
+    </div>
+    <label class="sound-toggle"><input type="checkbox" id="soundEnabled" checked />On</label>
+  </div>
+
+  <div id="info" class="info"></div>
+
+  <main id="list" class="list"></main>
+
+  <script src="popup.js"></script>
+</body>
+
+</html>

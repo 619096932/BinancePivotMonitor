@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="options.css" />
+  <title>Pivot Monitor Settings</title>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Pivot Monitor Settings</h1>
+
+      <div class="row">
+        <label class="label" for="serverUrl">Server URL</label>
+        <input id="serverUrl" class="input" type="text" placeholder="http://127.0.0.1:8080" />
+      </div>
+
+      <div class="row">
+        <label class="label">Filter Levels (show only these)</label>
+        <div class="level-btns" id="filterLevels">
+          <button type="button" data-level="R3">R3</button>
+          <button type="button" data-level="R4">R4</button>
+          <button type="button" data-level="R5">R5</button>
+          <button type="button" data-level="S3">S3</button>
+          <button type="button" data-level="S4">S4</button>
+          <button type="button" data-level="S5">S5</button>
+        </div>
+        <small class="hint">Leave all unselected to show all levels</small>
+      </div>
+
+      <div class="row">
+        <label class="label">Sound Alert Levels</label>
+        <div class="level-btns" id="soundLevels">
+          <button type="button" data-level="R3">R3</button>
+          <button type="button" data-level="R4">R4</button>
+          <button type="button" data-level="R5">R5</button>
+          <button type="button" data-level="S3">S3</button>
+          <button type="button" data-level="S4">S4</button>
+          <button type="button" data-level="S5">S5</button>
+        </div>
+        <small class="hint">Play sound when these levels are triggered</small>
+      </div>
+
+      <div class="row">
+        <label class="label" for="sound">Sound Enabled</label>
+        <input id="sound" type="checkbox" />
+      </div>
+
+      <div class="actions">
+        <button id="save" class="btn" type="button">Save</button>
+        <span id="status" class="status"></span>
+      </div>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+
+</html>

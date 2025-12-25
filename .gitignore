@@ -1,0 +1,36 @@
+# Go
+binance-pivot-monitor
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data (runtime generated)
+data/pivots/*.json
+data/signals/*.jsonl
+
+# Build artifacts
+dist/
+*.deb
+*.tar.gz
+
+# Logs
+*.log
+
+# Temp files
+*.tmp
+*.bak
