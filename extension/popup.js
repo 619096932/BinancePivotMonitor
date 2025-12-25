@@ -173,7 +173,7 @@ function render(signals) {
     item.appendChild(sub);
 
     item.addEventListener("click", () => {
-      chrome.runtime.sendMessage({ type: "jump_tab" }, () => { });
+      chrome.runtime.sendMessage({ type: "jump_tab", symbol: s.symbol }, () => { });
     });
 
     list.appendChild(item);
@@ -335,8 +335,39 @@ $("optionsBtn").addEventListener("click", () => {
   }
 });
 
+$("popoutBtn").addEventListener("click", () => {
+  // 在独立窗口中打开 popup
+  const popupUrl = chrome.runtime.getURL("popup.html");
+  chrome.windows.create({
+    url: popupUrl,
+    type: "popup",
+    width: 420,
+    height: 600,
+    focused: true
+  });
+  // 关闭当前 popup
+  window.close();
+});
+
+$("sidePanelBtn").addEventListener("click", async () => {
+  // 打开 Side Panel
+  try {
+    // 获取当前窗口
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab && tab.windowId) {
+      await chrome.sidePanel.open({ windowId: tab.windowId });
+    }
+  } catch (e) {
+    console.error("Failed to open side panel:", e);
+  }
+  window.close();
+});
+
 $("jumpBtn").addEventListener("click", () => {
-  chrome.runtime.sendMessage({ type: "jump_tab" }, () => { });
+  const searchSymbol = $("search").value.trim().toUpperCase();
+  // 如果搜索框有内容，尝试跳转到该交易对
+  const symbol = searchSymbol ? (searchSymbol.endsWith("USDT") ? searchSymbol : searchSymbol + "USDT") : "";
+  chrome.runtime.sendMessage({ type: "jump_tab", symbol }, () => { });
 });
 
 $("refreshBtn").addEventListener("click", () => {

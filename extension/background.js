@@ -183,18 +183,52 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     }
 
     if (msg.type === "jump_tab") {
+      const symbol = msg.symbol || "";
+
       chrome.tabs.query({}, (tabs) => {
-        const target = tabs.find((t) =>
-          typeof t.url === "string" && (t.url.includes("tradingview.com") || t.url.includes("binance.com"))
+        // 优先查找 TradingView 或 Binance 页面
+        let target = tabs.find((t) =>
+          typeof t.url === "string" && (t.url.includes("tradingview.com") || t.url.includes("binance.com/futures"))
         );
-        if (!target || typeof target.id !== "number") {
-          sendResponse({ ok: false });
-          return;
+
+        if (target && typeof target.id === "number") {
+          // 如果有交易对，更新 URL 跳转到对应交易对
+          if (symbol) {
+            let newUrl = "";
+            if (target.url.includes("tradingview.com")) {
+              // TradingView: https://www.tradingview.com/chart/?symbol=BINANCE:BTCUSDT.P
+              const baseSymbol = symbol.replace("USDT", "");
+              newUrl = `https://www.tradingview.com/chart/?symbol=BINANCE:${baseSymbol}USDT.P`;
+            } else if (target.url.includes("binance.com")) {
+              // Binance Futures: https://www.binance.com/futures/BTCUSDT
+              newUrl = `https://www.binance.com/futures/${symbol}`;
+            }
+
+            if (newUrl) {
+              chrome.tabs.update(target.id, { url: newUrl, active: true }, () => {
+                if (typeof target.windowId === "number") {
+                  chrome.windows.update(target.windowId, { focused: true });
+                }
+                sendResponse({ ok: true, url: newUrl });
+              });
+              return;
+            }
+          }
+
+          // 没有交易对，只切换到该标签页
+          if (typeof target.windowId === "number") {
+            chrome.windows.update(target.windowId, { focused: true });
+          }
+          chrome.tabs.update(target.id, { active: true }, () => sendResponse({ ok: true }));
+        } else {
+          // 没有找到现有页面，打开新标签页
+          if (symbol) {
+            const newUrl = `https://www.binance.com/futures/${symbol}`;
+            chrome.tabs.create({ url: newUrl }, () => sendResponse({ ok: true, url: newUrl }));
+          } else {
+            chrome.tabs.create({ url: "https://www.binance.com/futures" }, () => sendResponse({ ok: true }));
+          }
         }
-        if (typeof target.windowId === "number") {
-          chrome.windows.update(target.windowId, { focused: true });
-        }
-        chrome.tabs.update(target.id, { active: true }, () => sendResponse({ ok: true }));
       });
       return;
     }

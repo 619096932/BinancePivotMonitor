@@ -146,9 +146,9 @@ const dashboardHTML = `<!doctype html>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Pivot Monitor" />
-    <meta name="theme-color" content="#f6f7fb" />
+    <meta name="theme-color" content="#181A20" />
     <meta name="format-detection" content="telephone=no" />
     <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png" />
@@ -156,42 +156,45 @@ const dashboardHTML = `<!doctype html>
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
     <title>Pivot Monitor</title>
     <style>
-      :root{--bg:#f6f7fb;--card:#fff;--text:#0f172a;--muted:#64748b;--border:rgba(15,23,42,.08);--shadow:0 1px 2px rgba(15,23,42,.08),0 8px 24px rgba(15,23,42,.08);--up:#16a34a;--down:#dc2626;--pill:#e2e8f0;--pillText:#334155;--connectedBg:#e8f5e9;--connectedText:#1b5e20;--reconnectingBg:#fff8e1;--reconnectingText:#8d6e63;--disconnectedBg:#ffebee;--disconnectedText:#b71c1c;--staleBg:#ffebee;--staleText:#b71c1c;--freshBg:#e8f5e9;--freshText:#1b5e20}
-      *{-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+      :root{--bg:#181A20;--secondary-bg:#0B0E11;--card:#202630;--vessel:#29313D;--input:#29313D;--input-line:#434C5A;--line:#333B47;--text:#EAECEF;--text-secondary:#929AA5;--text-tertiary:#707A8A;--text-disabled:#4F5867;--yellow:#F0B90B;--btn-bg:#FCD535;--buy:#2EBD85;--buy-bg:rgba(46,189,133,0.1);--sell:#F6465D;--sell-bg:rgba(246,70,93,0.1);--success:#2EBD85;--success-bg:#102821;--error:#F6465D;--error-bg:#35141D;--tag-bg:#434C5A;--popup:#333B47}
+      *{-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;box-sizing:border-box}
       body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;padding-bottom:env(safe-area-inset-bottom)}
-      .wrap{max-width:860px;margin:0 auto;padding:14px;padding-top:max(14px,env(safe-area-inset-top))}
-      header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px;border:1px solid var(--border);border-radius:14px;background:var(--card);box-shadow:var(--shadow)}
-      .title{font-weight:800;letter-spacing:.2px}
-      .pill{font-size:12px;padding:4px 10px;border-radius:999px;background:var(--pill);color:var(--pillText);border:1px solid var(--border)}
-      .pill.connected{background:var(--connectedBg);color:var(--connectedText)}
-      .pill.reconnecting{background:var(--reconnectingBg);color:var(--reconnectingText)}
-      .pill.disconnected{background:var(--disconnectedBg);color:var(--disconnectedText)}
-      .pill.stale{background:var(--staleBg);color:var(--staleText)}
-      .pill.fresh{background:var(--freshBg);color:var(--freshText)}
-      .controls{margin-top:12px;display:flex;flex-direction:column;gap:10px}
-      .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-      input,select,button{font-size:14px}
-      input,select{padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--card);outline:none}
-      button{padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--card);cursor:pointer}
-      button:hover{filter:brightness(.98)}
-      button.active{background:#3b82f6;color:#fff;border-color:#3b82f6}
-      .level-btns{display:flex;gap:6px;flex-wrap:wrap}
-      .level-btns button{padding:6px 12px;font-size:13px}
-      .hint{margin-top:10px;font-size:12px;color:var(--muted)}
-      .pivot-status{margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--card);font-size:13px}
+      .wrap{max-width:860px;margin:0 auto;padding:12px;padding-top:max(12px,env(safe-area-inset-top))}
+      header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 14px;border-radius:8px;background:var(--card);border:1px solid var(--line)}
+      .title{font-weight:700;font-size:15px;color:var(--text)}
+      .pill{font-size:11px;padding:4px 10px;border-radius:4px;background:var(--tag-bg);color:var(--text-secondary);border:none}
+      .pill.connected{background:var(--success-bg);color:var(--success)}
+      .pill.reconnecting{background:rgba(240,185,11,0.1);color:var(--yellow)}
+      .pill.disconnected{background:var(--error-bg);color:var(--error)}
+      .pill.stale{background:var(--error-bg);color:var(--error)}
+      .pill.fresh{background:var(--success-bg);color:var(--success)}
+      .controls{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+      .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+      input,select{font-size:13px;padding:8px 12px;border:1px solid var(--input-line);border-radius:4px;background:var(--input);color:var(--text);outline:none}
+      input:focus,select:focus{border-color:var(--yellow)}
+      input::placeholder{color:var(--text-tertiary)}
+      select{cursor:pointer}
+      button{font-size:13px;padding:8px 14px;border:none;border-radius:4px;background:var(--vessel);color:var(--text);cursor:pointer;transition:background .15s}
+      button:hover{background:var(--tag-bg)}
+      button.active{background:var(--yellow);color:#202630}
+      .level-btns{display:flex;gap:4px;flex-wrap:wrap}
+      .level-btns button{padding:5px 10px;font-size:12px}
+      .hint{margin-top:8px;font-size:12px;color:var(--text-tertiary)}
+      .pivot-status{margin-top:10px;padding:10px 14px;border-radius:8px;background:var(--card);border:1px solid var(--line);font-size:12px;color:var(--text-secondary)}
       .pivot-status .row{justify-content:space-between}
-      .list{margin-top:12px;display:flex;flex-direction:column;gap:10px}
-      .item{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;box-shadow:0 1px 2px rgba(15,23,42,.06)}
-      .top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
-      .sym{font-weight:800;letter-spacing:.2px}
-      .tags{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-      .tag{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:#f8fafc;color:#334155}
-      .tag.up{background:rgba(22,163,74,.12);color:var(--up)}
-      .tag.down{background:rgba(220,38,38,.12);color:var(--down)}
-      .sub{margin-top:8px;display:flex;justify-content:space-between;gap:10px;font-size:13px;color:#334155}
-      .muted{color:var(--muted)}
-      .sound-toggle{display:flex;align-items:center;gap:6px}
-      .sound-toggle input{width:18px;height:18px}
+      .list{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+      .item{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer;transition:background .15s}
+      .item:hover{background:var(--vessel)}
+      .top{display:flex;justify-content:space-between;gap:10px;align-items:center}
+      .sym{font-weight:700;font-size:14px;color:var(--text)}
+      .tags{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+      .tag{font-size:11px;padding:2px 8px;border-radius:4px;background:var(--vessel);color:var(--text)}
+      .tag.up{background:rgba(46,189,133,0.2);color:#0ECB81}
+      .tag.down{background:rgba(246,70,93,0.2);color:#F6465D}
+      .sub{margin-top:6px;display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--text-secondary)}
+      .muted{color:var(--text-tertiary)}
+      .sound-toggle{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary)}
+      .sound-toggle input{width:16px;height:16px;accent-color:var(--yellow)}
       @media(max-width:520px){.controls{grid-template-columns:1fr}}
     </style>
   </head>
@@ -217,7 +220,7 @@ const dashboardHTML = `<!doctype html>
           <select id="direction"><option value="">All directions</option><option value="up">up</option><option value="down">down</option></select>
         </div>
         <div class="row">
-          <span style="font-size:13px">Levels:</span>
+          <span style="font-size:12px;color:var(--text-secondary)">Levels:</span>
           <div class="level-btns" id="filterLevels">
             <button type="button" data-level="R3">R3</button>
             <button type="button" data-level="R4">R4</button>
@@ -228,7 +231,7 @@ const dashboardHTML = `<!doctype html>
           </div>
         </div>
         <div class="row">
-          <span style="font-size:13px">Sound alerts:</span>
+          <span style="font-size:12px;color:var(--text-secondary)">Sound:</span>
           <div class="level-btns" id="soundLevels">
             <button type="button" data-level="R3">R3</button>
             <button type="button" data-level="R4">R4</button>
@@ -237,7 +240,7 @@ const dashboardHTML = `<!doctype html>
             <button type="button" data-level="S4">S4</button>
             <button type="button" data-level="S5">S5</button>
           </div>
-          <label class="sound-toggle"><input type="checkbox" id="soundEnabled" checked /> Sound</label>
+          <label class="sound-toggle"><input type="checkbox" id="soundEnabled" checked /> On</label>
         </div>
       </div>
       <div id="hint" class="hint"></div>
@@ -285,7 +288,7 @@ const dashboardHTML = `<!doctype html>
       const buildQ=f=>{const q=new URLSearchParams();if(f.symbol)q.set("symbol",f.symbol);if(f.period)q.set("period",f.period);f.levels.forEach(l=>q.append("level",l));if(f.direction)q.set("direction",f.direction);q.set("limit",f.limit);return q.toString()};
       const sortD=l=>l.sort((a,b)=>(new Date(b.triggered_at)||0)-(new Date(a.triggered_at)||0));
       const merge=(b,i)=>{const m=new Map();(b||[]).forEach(s=>s&&s.id&&m.set(s.id,s));(i||[]).forEach(s=>s&&s.id&&m.set(s.id,s));const o=Array.from(m.values());sortD(o);return o};
-      const render=l=>{const e=$("list");e.innerHTML="";if(!l||!l.length){e.innerHTML='<div class="item">No signals</div>';return}l.forEach(s=>{const i=document.createElement("div");i.className="item";i.dataset.time=s.triggered_at;i.innerHTML='<div class="top"><div class="sym">'+s.symbol+'</div><div class="tags"><span class="tag">'+s.period+'</span><span class="tag">'+s.level+'</span><span class="tag '+s.direction+'">'+s.direction+'</span></div></div><div class="sub"><div>'+fmtPrice(s.price)+'</div><div class="muted time-rel">'+fmtRelTime(s.triggered_at)+'</div></div>';e.appendChild(i)})};
+      const render=l=>{const e=$("list");e.innerHTML="";if(!l||!l.length){e.innerHTML='<div class="item" style="cursor:default">No signals</div>';return}l.forEach(s=>{const i=document.createElement("div");i.className="item";i.dataset.time=s.triggered_at;i.dataset.symbol=s.symbol;i.innerHTML='<div class="top"><div class="sym">'+s.symbol+'</div><div class="tags"><span class="tag">'+s.period+'</span><span class="tag">'+s.level+'</span><span class="tag '+s.direction+'">'+s.direction+'</span></div></div><div class="sub"><div>'+fmtPrice(s.price)+'</div><div class="muted time-rel">'+fmtRelTime(s.triggered_at)+'</div></div>';i.onclick=()=>{if(window.parent!==window){window.parent.postMessage({type:"jump_symbol",symbol:s.symbol},"*")}else{window.open("https://www.binance.com/futures/"+s.symbol,"_blank")}};e.appendChild(i)})};
       function updateRelTimes(){document.querySelectorAll(".time-rel").forEach(el=>{const item=el.closest(".item");if(item&&item.dataset.time)el.textContent=fmtRelTime(item.dataset.time)})}
       let all=[];
       async function loadHistory(){const f=filters();$("hint").textContent="Loading...";try{const r=await fetch("/api/history?"+buildQ(f));if(!r.ok)throw new Error("http "+r.status);all=merge([],await r.json());render(all);$("hint").textContent="Signals: "+all.length}catch(e){$("hint").textContent="Load failed: "+e}}

@@ -26,10 +26,14 @@
     "storage",
     "tabs",
     "alarms",
-    "offscreen"
+    "offscreen",
+    "sidePanel"
   ],
   "host_permissions": [
     "http://*/*",
     "https://*/*"
-  ]
+  ],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  }
 }
