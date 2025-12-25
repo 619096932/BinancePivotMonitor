@@ -25,13 +25,15 @@ Binance Pivot Monitor is a real-time cryptocurrency pivot point monitoring syste
 ### Features
 
 - **Real-time Monitoring**: WebSocket connection to Binance for live mark price updates
+- **Real-time Ticker Data**: 24h price change, volume, and trade count via `!ticker@arr` stream
 - **Camarilla Pivot Points**: Automatic calculation of R3-R5 and S3-S5 levels
 - **Daily & Weekly Pivots**: Support for both timeframes with automatic refresh at 08:00 UTC+8
 - **Multi-platform Alerts**:
   - Web Dashboard with SSE (Server-Sent Events)
   - Chrome Extension with sound notifications
   - Side Panel mode for persistent display alongside trading pages
-- **Smart Navigation**: Click signals to jump to corresponding trading pair on TradingView or Binance
+- **Smart Navigation**: Click signals to show action menu (Jump to Trade / Copy Symbol / Filter)
+- **Volume & Trades Ranking**: Real-time ranking of signals by 24h volume and trade count
 - **Binance Dark Theme**: UI styled to match Binance's dark mode
 - **Signal History**: Persistent storage with configurable retention
 - **Cooldown System**: Prevents duplicate alerts within 30 minutes
@@ -42,12 +44,12 @@ Binance Pivot Monitor is a real-time cryptocurrency pivot point monitoring syste
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │  Binance WS     │────▶│   Go Backend    │────▶│  Web Dashboard  │
 │  (Mark Price)   │     │                 │     │  (SSE)          │
-└─────────────────┘     │  - Pivot Calc   │     └─────────────────┘
-                        │  - Signal Gen   │
-                        │  - History      │     ┌─────────────────┐
-                        │                 │────▶│ Chrome Extension│
-                        └─────────────────┘     │  (SSE + Sound)  │
-                                                └─────────────────┘
+│  (Ticker)       │     │  - Pivot Calc   │     └─────────────────┘
+└─────────────────┘     │  - Signal Gen   │
+                        │  - Ticker Store │     ┌─────────────────┐
+                        │  - History      │────▶│ Chrome Extension│
+                        │                 │     │  (SSE + Sound)  │
+                        └─────────────────┘     └─────────────────┘
 ```
 
 ### Project Structure
@@ -58,10 +60,12 @@ Binance Pivot Monitor is a real-time cryptocurrency pivot point monitoring syste
 ├── internal/
 │   ├── binance/         # Binance REST & WebSocket clients
 │   ├── httpapi/         # HTTP API server & dashboard
+│   │   └── static/      # Embedded frontend (HTML, JS)
 │   ├── monitor/         # Price monitoring & signal generation
 │   ├── pivot/           # Pivot calculation & scheduling
 │   ├── signal/          # Signal types, history & cooldown
-│   └── sse/             # Server-Sent Events broker
+│   ├── sse/             # Server-Sent Events broker
+│   └── ticker/          # Real-time ticker data store & monitor
 ├── extension/           # Chrome extension
 │   ├── icons/           # Extension icons
 │   ├── background.js    # Service worker
@@ -109,6 +113,7 @@ go build -o binance-pivot-monitor ./cmd/server
 | `-monitor-heartbeat` | `0` | Heartbeat log interval (0=disabled) |
 | `-history-max` | `20000` | Maximum signals in history |
 | `-history-file` | `signals/history.jsonl` | History file path |
+| `-ticker-batch-interval` | `500ms` | Ticker SSE batch interval |
 
 #### Chrome Extension Installation
 
