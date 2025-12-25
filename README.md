@@ -309,10 +309,12 @@ Binance Pivot Monitor 是一个实时加密货币枢轴点监控系统，专为�
 ├── internal/
 │   ├── binance/         # 币安 REST 和 WebSocket 客户端
 │   ├── httpapi/         # HTTP API 服务器和仪表板
+│   │   └── static/      # 嵌入式前端（HTML、JS）
 │   ├── monitor/         # 价格监控和信号生成
 │   ├── pivot/           # 枢轴点计算和调度
 │   ├── signal/          # 信号类型、历史和冷却
-│   └── sse/             # Server-Sent Events 代理
+│   ├── sse/             # Server-Sent Events 代理
+│   └── ticker/          # 实时行情数据存储和监控
 ├── extension/           # Chrome 扩展
 │   ├── icons/           # 扩展图标
 │   ├── background.js    # Service Worker
@@ -360,6 +362,7 @@ go build -o binance-pivot-monitor ./cmd/server
 | `-monitor-heartbeat` | `0` | 心跳日志间隔（0=禁用） |
 | `-history-max` | `20000` | 历史记录最大数量 |
 | `-history-file` | `signals/history.jsonl` | 历史文件路径 |
+| `-ticker-batch-interval` | `500ms` | 行情 SSE 批量推送间隔 |
 
 #### Chrome 扩展安装
 
@@ -388,10 +391,32 @@ curl "http://localhost:8080/api/history?level=R4&level=S4&limit=100"
 
 #### GET /api/sse
 
-Server-Sent Events 实时信号流。
+Server-Sent Events 实时信号和行情流。
 
 **事件：**
 - `signal` - 新信号触发
+- `ticker` - 批量行情更新（每 500ms）
+
+#### GET /api/tickers
+
+获取所有交易对的当前行情数据。
+
+**参数：**
+- `symbols` - 逗号分隔的交易对列表（可选，不传则返回全部）
+
+**响应：**
+```json
+{
+  "BTCUSDT": {
+    "symbol": "BTCUSDT",
+    "last_price": 98500.5,
+    "price_percent": 2.35,
+    "trade_count": 1234567,
+    "quote_volume": 5678901234.56,
+    "updated_at": 1766680305863
+  }
+}
+```
 
 #### GET /api/pivot-status
 
@@ -463,6 +488,14 @@ sudo systemctl start binance-pivot-monitor
   - Direction：选择上穿或下穿
   - Levels：多选要显示的级别
 - **声音提醒**：选择触发声音的级别，可开关
+- **视图切换**：
+  - Signals：信号列表（默认）
+  - Volume Rank：按 24 小时成交额排行
+  - Trades Rank：按 24 小时成交笔数排行
+- **操作菜单**：点击信号弹出菜单
+  - 🚀 Jump to Trade：跳转到交易页面
+  - 📋 Copy Symbol：复制交易对名称
+  - 🔍 Filter This Symbol：筛选当前交易对
 
 #### Chrome 扩展
 
