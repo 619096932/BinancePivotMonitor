@@ -276,7 +276,7 @@ Binance Pivot Monitor 是一个实时加密货币枢轴点监控系统，专为�
 
 ```bash
 # 克隆仓库
-git clone https://github.com/your-repo/binance-pivot-monitor.git
+git clone https://github.com/619096932/BinancePivotMonitor.git
 cd binance-pivot-monitor
 
 # 构建
