@@ -13,8 +13,10 @@
             if (diff < 0) return "just now";
             if (diff < 60) return diff + "s ago";
             if (diff < 3600) return Math.floor(diff / 60) + "m ago";
-            if (diff < 28800) return Math.floor(diff / 3600) + "h " + Math.floor((diff % 3600) / 60) + "m ago";
-            return d.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+            if (diff < 86400) return Math.floor(diff / 3600) + "h " + Math.floor((diff % 3600) / 60) + "m ago";
+            const days = Math.floor(diff / 86400);
+            const hours = Math.floor((diff % 86400) / 3600);
+            return days + "d " + hours + "h ago";
         } catch (_) { return String(v); }
     };
 
