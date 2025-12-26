@@ -14,6 +14,8 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png" />
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
     <title>Pivot Monitor</title>
+    <!-- Clusterize.js for virtual scrolling -->
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/clusterize.js/0.19.0/clusterize.min.css" />
     <style>
         :root {
             --bg: #181A20;
@@ -130,14 +132,16 @@
             margin-top: 8px;
             display: flex;
             flex-direction: column;
-            gap: 6px
+            gap: 6px;
+            min-height: 88px
         }
 
         .row {
             display: flex;
             gap: 8px;
             flex-wrap: wrap;
-            align-items: center
+            align-items: center;
+            min-height: 28px
         }
 
         input,
@@ -196,9 +200,10 @@
         }
 
         .hint {
-            margin-top: 6px;
             font-size: 11px;
-            color: var(--text-tertiary)
+            color: var(--text-tertiary);
+            min-width: 100px;
+            text-align: right
         }
 
         .pivot-status {
@@ -208,7 +213,8 @@
             background: var(--card);
             border: 1px solid var(--line);
             font-size: 11px;
-            color: var(--text-secondary)
+            color: var(--text-secondary);
+            min-height: 36px
         }
 
         .pivot-status .row {
@@ -218,7 +224,8 @@
         .tabs {
             display: flex;
             gap: 4px;
-            margin-top: 8px
+            margin-top: 8px;
+            min-height: 26px
         }
 
         .tab {
@@ -255,34 +262,62 @@
             accent-color: var(--yellow)
         }
 
-        /* 滚动列表区域 */
+        /* 滚动列表区域 - Clusterize 适配 */
         .scroll-area {
             flex: 1;
-            overflow-y: auto;
-            overflow-x: hidden;
-            -webkit-overflow-scrolling: touch;
+            overflow: hidden;
             padding-bottom: env(safe-area-inset-bottom)
         }
 
         .scroll-content {
             max-width: 860px;
+            width: 100%;
+            height: 100%;
             margin: 0 auto;
             padding: 0 12px 12px
         }
 
-        .list {
+        /* Clusterize 容器 - 覆盖默认样式，预设高度避免 CLS */
+        .clusterize-scroll {
+            max-height: none !important;
+            height: calc(100vh - 320px);
+            min-height: 200px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch
+        }
+
+        @media(max-width:520px) {
+            .clusterize-scroll {
+                height: calc(100vh - 360px)
+            }
+        }
+
+        .clusterize-content {
             display: flex;
             flex-direction: column;
             gap: 6px
         }
 
+        .clusterize-no-data {
+            padding: 20px;
+            text-align: center;
+            color: var(--text-tertiary)
+        }
+
+        /* 信号项 - 固定高度以支持虚拟滚动和避免 CLS */
         .item {
             background: var(--card);
             border: 1px solid var(--line);
             border-radius: 8px;
             padding: 10px 12px;
             cursor: pointer;
-            transition: background .15s
+            transition: background .15s;
+            height: 96px;
+            min-height: 96px;
+            max-height: 96px;
+            box-sizing: border-box;
+            overflow: hidden
         }
 
         .item:hover {
@@ -413,52 +448,32 @@
             color: var(--text-tertiary)
         }
 
-        /* 排行榜 */
-        .ranking {
-            background: var(--card);
-            border: 1px solid var(--line);
-            border-radius: 8px;
-            padding: 12px;
-            display: none
-        }
-
-        .ranking.show {
-            display: block
-        }
-
-        .ranking-title {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text);
-            margin-bottom: 10px
-        }
-
-        .ranking-list {
-            display: flex;
-            flex-direction: column;
-            gap: 6px
-        }
-
+        /* 排行榜项 - 固定高度避免 CLS */
         .ranking-item {
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 8px 10px;
-            background: var(--vessel);
-            border-radius: 6px;
+            padding: 10px 12px;
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 8px;
             cursor: pointer;
-            transition: background .15s
+            transition: background .15s;
+            height: 50px;
+            min-height: 50px;
+            max-height: 50px;
+            box-sizing: border-box
         }
 
         .ranking-item:hover {
-            background: var(--tag-bg)
+            background: var(--vessel)
         }
 
         .ranking-rank {
             font-size: 12px;
             font-weight: 700;
             color: var(--yellow);
-            min-width: 24px
+            min-width: 28px
         }
 
         .ranking-rank.top3 {
@@ -485,7 +500,7 @@
             border: 1px solid var(--line);
             border-radius: 8px;
             padding: 6px 0;
-            min-width: 160px;
+            min-width: 180px;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
             display: none
         }
@@ -527,10 +542,21 @@
             opacity: 1
         }
 
+        /* 小输入框 */
+        .input-sm {
+            width: 70px;
+            padding: 5px 8px;
+            font-size: 12px
+        }
+
         @media(max-width:520px) {
             .price-info {
                 flex-wrap: wrap;
                 gap: 6px
+            }
+
+            .input-sm {
+                width: 60px
             }
         }
     </style>
@@ -554,7 +580,7 @@
         </div>
         <div class="controls">
             <div class="row">
-                <input id="symbol" type="text" placeholder="Symbol (e.g. BTC)" style="flex:1;min-width:100px" />
+                <input id="symbol" type="text" placeholder="Symbol ($BTC=exact)" style="flex:1;min-width:100px" />
                 <select id="period">
                     <option value="">All</option>
                     <option value="1d">1d</option>
@@ -565,6 +591,14 @@
                     <option value="up">up</option>
                     <option value="down">down</option>
                 </select>
+                <select id="limit">
+                    <option value="500">500</option>
+                    <option value="1000" selected>1000</option>
+                    <option value="2000">2000</option>
+                    <option value="5000">5000</option>
+                    <option value="10000">10000</option>
+                </select>
+                <input id="minDiff" type="number" class="input-sm" placeholder="Diff%" min="0" step="0.1" />
             </div>
             <div class="row">
                 <span style="font-size:11px;color:var(--text-secondary)">Levels:</span>
@@ -596,16 +630,17 @@
                 <button class="tab" data-view="volume">Volume</button>
                 <button class="tab" data-view="trades">Trades</button>
             </div>
-            <div id="hint" class="hint"></div>
+            <div id="hint" class="hint">Signals: -/-</div>
         </div>
     </div>
     <!-- 滚动列表区域 -->
     <div class="scroll-area">
         <div class="scroll-content">
-            <div id="list" class="list"></div>
-            <div id="ranking" class="ranking">
-                <div class="ranking-title" id="rankingTitle">Ranking</div>
-                <div class="ranking-list" id="rankingList"></div>
+            <div id="signalScroll" class="clusterize-scroll">
+                <div id="signalList" class="clusterize-content"></div>
+            </div>
+            <div id="rankingScroll" class="clusterize-scroll" style="display:none">
+                <div id="rankingList" class="clusterize-content"></div>
             </div>
         </div>
     </div>
@@ -613,10 +648,13 @@
     <div id="actionMenu" class="action-menu">
         <div class="action-menu-item" data-action="trade">🚀 Jump to Trade</div>
         <div class="action-menu-item" data-action="copy">📋 Copy Symbol</div>
-        <div class="action-menu-item" data-action="filter">🔍 Filter This Symbol</div>
+        <div class="action-menu-item" data-action="filter">🔍 Filter Symbol</div>
+        <div class="action-menu-item" data-action="signals" style="display:none">📊 Show Signals</div>
     </div>
     <!-- Toast -->
     <div id="toast" class="toast"></div>
+    <!-- Clusterize.js -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/clusterize.js/0.19.0/clusterize.min.js"></script>
     <script src="/static/app.js"></script>
 </body>
 
