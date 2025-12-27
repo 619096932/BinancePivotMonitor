@@ -24,7 +24,8 @@ type Store struct {
 }
 
 // DefaultKlineCount is the default number of klines to maintain per symbol.
-const DefaultKlineCount = 12
+// Set to 20 to support pattern detection (max requirement is 14 klines).
+const DefaultKlineCount = 20
 
 // NewStore creates a new kline store.
 // interval: kline interval (e.g., 5 * time.Minute)

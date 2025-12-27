@@ -33,3 +33,6 @@ dist/
 # Temp files
 *.tmp
 *.bak
+.DS_Store
+Thumbs.db
+server
