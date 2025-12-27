@@ -24,7 +24,6 @@ data/
 
 # Build artifacts
 dist/
-*.deb
 *.tar.gz
 
 # Logs

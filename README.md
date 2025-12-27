@@ -20,7 +20,7 @@
 
 ### Overview
 
-Binance Pivot Monitor is a real-time cryptocurrency pivot point monitoring system for Binance USDT perpetual futures. It calculates Camarilla pivot levels and sends alerts when prices cross key support/resistance levels.
+Binance Pivot Monitor is a real-time cryptocurrency pivot point monitoring system for Binance USDT perpetual futures. It calculates Camarilla pivot levels and sends alerts when prices cross key support/resistance levels. It also supports K-line candlestick pattern recognition and correlates pattern signals with pivot alerts.
 
 ### Features
 
@@ -28,6 +28,8 @@ Binance Pivot Monitor is a real-time cryptocurrency pivot point monitoring syste
 - **Real-time Ticker Data**: 24h price change, volume, and trade count via `!ticker@arr` stream
 - **Camarilla Pivot Points**: Automatic calculation of R3-R5 and S3-S5 levels
 - **Daily & Weekly Pivots**: Support for both timeframes with automatic refresh at 08:00 UTC+8
+- **Candlestick Pattern Recognition**: K-line pattern detection (talib + custom) with confidence and direction
+- **Pattern History & Correlation**: Persist pattern signals and correlate with pivot alerts
 - **Multi-platform Alerts**:
   - Web Dashboard with SSE (Server-Sent Events)
   - Chrome Extension with sound notifications
@@ -38,6 +40,14 @@ Binance Pivot Monitor is a real-time cryptocurrency pivot point monitoring syste
 - **Signal History**: Persistent storage with configurable retention
 - **Cooldown System**: Prevents duplicate alerts within 30 minutes
 
+### Version Notes (Latest)
+
+- Added candlestick pattern recognition (talib + custom) with confidence/direction and SSE pattern events
+- Added pattern history persistence with compaction and kline store stats APIs
+- Added `/api/patterns`, `/api/klines`, `/api/klines/stats`, and `/api/runtime`
+- Added pivot + pattern correlation in history enrichment
+- Fixed weekly refresh staleness on Sunday and improved ticker parsing of numeric strings
+
 ### Architecture
 
 ```
@@ -46,6 +56,8 @@ Binance Pivot Monitor is a real-time cryptocurrency pivot point monitoring syste
 │  (Mark Price)   │     │                 │     │  (SSE)          │
 │  (Ticker)       │     │  - Pivot Calc   │     └─────────────────┘
 └─────────────────┘     │  - Signal Gen   │
+                        │  - Pattern Det  │
+                        │  - Kline Store  │
                         │  - Ticker Store │     ┌─────────────────┐
                         │  - History      │────▶│ Chrome Extension│
                         │                 │     │  (SSE + Sound)  │
@@ -61,7 +73,9 @@ Binance Pivot Monitor is a real-time cryptocurrency pivot point monitoring syste
 │   ├── binance/         # Binance REST & WebSocket clients
 │   ├── httpapi/         # HTTP API server & dashboard
 │   │   └── static/      # Embedded frontend (HTML, JS)
+│   ├── kline/           # Kline store & aggregation
 │   ├── monitor/         # Price monitoring & signal generation
+│   ├── pattern/         # Candlestick pattern detection & history
 │   ├── pivot/           # Pivot calculation & scheduling
 │   ├── signal/          # Signal types, history & cooldown
 │   ├── sse/             # Server-Sent Events broker
@@ -76,6 +90,7 @@ Binance Pivot Monitor is a real-time cryptocurrency pivot point monitoring syste
 ├── static/              # Web assets (favicon, icons)
 ├── data/                # Runtime data
 │   ├── pivots/          # Cached pivot levels
+│   ├── patterns/        # Pattern history
 │   └── signals/         # Signal history
 └── packaging/           # Deployment scripts
 ```
@@ -84,7 +99,7 @@ Binance Pivot Monitor is a real-time cryptocurrency pivot point monitoring syste
 
 #### Prerequisites
 
-- Go 1.21+
+- Go 1.22+
 - Chrome/Edge browser (for extension)
 
 #### Build from Source
@@ -114,6 +129,18 @@ go build -o binance-pivot-monitor ./cmd/server
 | `-history-max` | `20000` | Maximum signals in history |
 | `-history-file` | `signals/history.jsonl` | History file path |
 | `-ticker-batch-interval` | `500ms` | Ticker SSE batch interval |
+
+#### Pattern Recognition (Environment Variables)
+
+| Env | Default | Description |
+|-----|---------|-------------|
+| `PATTERN_ENABLED` | `true` | Enable candlestick pattern detection |
+| `KLINE_COUNT` | `12` | Number of historical klines kept per symbol |
+| `KLINE_INTERVAL` | `5m` | Kline interval (supports `5m` or plain minutes like `5`) |
+| `PATTERN_MIN_CONFIDENCE` | `60` | Minimum confidence threshold |
+| `PATTERN_CRYPTO_MODE` | `true` | Relax gap constraints for crypto markets |
+| `PATTERN_HISTORY_FILE` | `patterns/history.jsonl` | Pattern history file (relative to `-data-dir`) |
+| `PATTERN_HISTORY_MAX` | `1000` | Maximum patterns kept in memory |
 
 #### Chrome Extension Installation
 
@@ -147,6 +174,7 @@ Server-Sent Events stream for real-time signals and ticker data.
 **Events:**
 - `signal` - New signal triggered
 - `ticker` - Batch ticker update (every 500ms)
+- `pattern` - New candlestick pattern detected
 
 #### GET /api/tickers
 
@@ -168,6 +196,36 @@ Get current ticker data for all symbols.
   }
 }
 ```
+
+#### GET /api/patterns
+
+Query candlestick pattern history.
+
+**Parameters:**
+- `symbol` - Filter by symbol (exact match)
+- `pattern` - Pattern type (e.g., `hammer`)
+- `direction` - `bullish`, `bearish`, or `neutral`
+- `limit` - Maximum results (default: 100)
+
+**Example:**
+```bash
+curl "http://localhost:8080/api/patterns?symbol=BTCUSDT&pattern=hammer&limit=50"
+```
+
+#### GET /api/klines
+
+Get kline data for a symbol (debugging).
+
+**Parameters:**
+- `symbol` - Symbol (required)
+
+#### GET /api/klines/stats
+
+Get kline store statistics.
+
+#### GET /api/runtime
+
+Get runtime statistics (goroutines, memory, uptime).
 
 #### GET /api/pivot-status
 
@@ -208,22 +266,28 @@ Where: H = High, L = Low, C = Close, Range = H - L
 
 ### Deployment
 
-#### Systemd Service
+#### Systemd Service (manual)
 
 ```bash
-# Build .deb package
-cd packaging
-./build-deb.sh
+# Build
+go build -o binance-pivot-monitor ./cmd/server
 
-# Install
-sudo dpkg -i binance-pivot-monitor_*.deb
+# Install binary and scripts
+sudo install -m 0755 binance-pivot-monitor /usr/bin/binance-pivot-monitor
+sudo install -m 0755 packaging/binance-pivot-monitor-run.sh /usr/bin/binance-pivot-monitor-run
+sudo install -d /etc/binance-pivot-monitor
+sudo install -m 0644 packaging/binance-pivot-monitor.env /etc/binance-pivot-monitor/binance-pivot-monitor.env
+sudo install -m 0644 packaging/binance-pivot-monitor.service /etc/systemd/system/binance-pivot-monitor.service
+sudo install -d /var/lib/binance-pivot-monitor
+sudo useradd -r -s /usr/sbin/nologin binance-pivot-monitor || true
+sudo chown -R binance-pivot-monitor:binance-pivot-monitor /var/lib/binance-pivot-monitor
 
 # Configure
 sudo vim /etc/binance-pivot-monitor/binance-pivot-monitor.env
 
 # Start service
-sudo systemctl enable binance-pivot-monitor
-sudo systemctl start binance-pivot-monitor
+sudo systemctl daemon-reload
+sudo systemctl enable --now binance-pivot-monitor
 ```
 
 ### License
@@ -269,7 +333,7 @@ Response Size: ~60 KB per request (400 signals with full metadata)
 
 ### 概述
 
-Binance Pivot Monitor 是一个实时加密货币枢轴点监控系统，专为币安 USDT 永续合约设计。系统自动计算 Camarilla 枢轴点位，并在价格突破关键支撑/阻力位时发送警报。
+Binance Pivot Monitor 是一个实时加密货币枢轴点监控系统，专为币安 USDT 永续合约设计。系统自动计算 Camarilla 枢轴点位，并在价格突破关键支撑/阻力位时发送警报。同时支持 K 线形态识别，并与枢轴点信号进行关联。
 
 ### 功能特性
 
@@ -277,6 +341,8 @@ Binance Pivot Monitor 是一个实时加密货币枢轴点监控系统，专为�
 - **实时行情数据**：通过 `!ticker@arr` 流获取 24 小时价格变化、成交额、成交笔数
 - **Camarilla 枢轴点**：自动计算 R3-R5 和 S3-S5 点位
 - **日线和周线枢轴点**：支持两种时间周期，每天 UTC+8 08:00 自动刷新
+- **K 线形态识别**：基于 K 线的形态检测（talib + 自定义），包含方向与置信度
+- **形态历史与关联**：持久化形态信号，并与枢轴点信号关联
 - **多平台警报**：
   - Web 仪表板（SSE 实时推送）
   - Chrome 扩展（支持声音提醒）
@@ -287,6 +353,14 @@ Binance Pivot Monitor 是一个实时加密货币枢轴点监控系统，专为�
 - **信号历史**：持久化存储，可配置保留数量
 - **冷却系统**：30 分钟内防止重复警报
 
+### 版本说明（最新）
+
+- 新增 K 线形态识别（talib + 自定义）、形态 SSE 推送与置信度信息
+- 新增形态历史持久化与自动截断，以及 K 线存储统计接口
+- 新增 `/api/patterns`、`/api/klines`、`/api/klines/stats`、`/api/runtime`
+- 新增枢轴点与形态信号的关联展示
+- 修复周日场景下周线过期判断，并增强 ticker 数字字符串兼容
+
 ### 系统架构
 
 ```
@@ -295,6 +369,8 @@ Binance Pivot Monitor 是一个实时加密货币枢轴点监控系统，专为�
 │  (标记价格)     │     │                 │     │  (SSE 推送)     │
 │  (行情数据)     │     │  - 枢轴点计算   │     └─────────────────┘
 └─────────────────┘     │  - 信号生成     │
+                        │  - 形态识别     │
+                        │  - K 线存储     │
                         │  - 行情存储     │     ┌─────────────────┐
                         │  - 历史记录     │────▶│  Chrome 扩展    │
                         │                 │     │  (SSE + 声音)   │
@@ -310,7 +386,9 @@ Binance Pivot Monitor 是一个实时加密货币枢轴点监控系统，专为�
 │   ├── binance/         # 币安 REST 和 WebSocket 客户端
 │   ├── httpapi/         # HTTP API 服务器和仪表板
 │   │   └── static/      # 嵌入式前端（HTML、JS）
+│   ├── kline/           # K 线存储与聚合
 │   ├── monitor/         # 价格监控和信号生成
+│   ├── pattern/         # K 线形态识别与历史
 │   ├── pivot/           # 枢轴点计算和调度
 │   ├── signal/          # 信号类型、历史和冷却
 │   ├── sse/             # Server-Sent Events 代理
@@ -325,6 +403,7 @@ Binance Pivot Monitor 是一个实时加密货币枢轴点监控系统，专为�
 ├── static/              # Web 资源（图标等）
 ├── data/                # 运行时数据
 │   ├── pivots/          # 缓存的枢轴点数据
+│   ├── patterns/        # 形态历史
 │   └── signals/         # 信号历史记录
 └── packaging/           # 部署脚本
 ```
@@ -333,7 +412,7 @@ Binance Pivot Monitor 是一个实时加密货币枢轴点监控系统，专为�
 
 #### 环境要求
 
-- Go 1.21+
+- Go 1.22+
 - Chrome/Edge 浏览器（用于扩展）
 
 #### 从源码构建
@@ -363,6 +442,18 @@ go build -o binance-pivot-monitor ./cmd/server
 | `-history-max` | `20000` | 历史记录最大数量 |
 | `-history-file` | `signals/history.jsonl` | 历史文件路径 |
 | `-ticker-batch-interval` | `500ms` | 行情 SSE 批量推送间隔 |
+
+#### 形态识别（环境变量）
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `PATTERN_ENABLED` | `true` | 是否启用 K 线形态识别 |
+| `KLINE_COUNT` | `12` | 每个交易对保留的历史 K 线数量 |
+| `KLINE_INTERVAL` | `5m` | K 线周期（支持 `5m` 或纯数字分钟如 `5`） |
+| `PATTERN_MIN_CONFIDENCE` | `60` | 置信度阈值 |
+| `PATTERN_CRYPTO_MODE` | `true` | 加密市场模式（放宽缺口条件） |
+| `PATTERN_HISTORY_FILE` | `patterns/history.jsonl` | 形态历史文件（相对于 `-data-dir`） |
+| `PATTERN_HISTORY_MAX` | `1000` | 内存保留的形态数量上限 |
 
 #### Chrome 扩展安装
 
@@ -396,6 +487,7 @@ Server-Sent Events 实时信号和行情流。
 **事件：**
 - `signal` - 新信号触发
 - `ticker` - 批量行情更新（每 500ms）
+- `pattern` - 新的 K 线形态信号
 
 #### GET /api/tickers
 
@@ -417,6 +509,36 @@ Server-Sent Events 实时信号和行情流。
   }
 }
 ```
+
+#### GET /api/patterns
+
+查询 K 线形态历史。
+
+**参数：**
+- `symbol` - 交易对（精确匹配）
+- `pattern` - 形态类型（如 `hammer`）
+- `direction` - `bullish` / `bearish` / `neutral`
+- `limit` - 返回数量（默认：100）
+
+**示例：**
+```bash
+curl "http://localhost:8080/api/patterns?symbol=BTCUSDT&pattern=hammer&limit=50"
+```
+
+#### GET /api/klines
+
+获取指定交易对的 K 线数据（调试用）。
+
+**参数：**
+- `symbol` - 交易对（必填）
+
+#### GET /api/klines/stats
+
+获取 K 线存储统计。
+
+#### GET /api/runtime
+
+获取运行时统计信息（协程数、内存、运行时间）。
 
 #### GET /api/pivot-status
 
@@ -457,22 +579,28 @@ Server-Sent Events 实时信号和行情流。
 
 ### 部署
 
-#### Systemd 服务
+#### Systemd 服务（手动安装）
 
 ```bash
-# 构建 .deb 包
-cd packaging
-./build-deb.sh
+# 构建
+go build -o binance-pivot-monitor ./cmd/server
 
-# 安装
-sudo dpkg -i binance-pivot-monitor_*.deb
+# 安装二进制与脚本
+sudo install -m 0755 binance-pivot-monitor /usr/bin/binance-pivot-monitor
+sudo install -m 0755 packaging/binance-pivot-monitor-run.sh /usr/bin/binance-pivot-monitor-run
+sudo install -d /etc/binance-pivot-monitor
+sudo install -m 0644 packaging/binance-pivot-monitor.env /etc/binance-pivot-monitor/binance-pivot-monitor.env
+sudo install -m 0644 packaging/binance-pivot-monitor.service /etc/systemd/system/binance-pivot-monitor.service
+sudo install -d /var/lib/binance-pivot-monitor
+sudo useradd -r -s /usr/sbin/nologin binance-pivot-monitor || true
+sudo chown -R binance-pivot-monitor:binance-pivot-monitor /var/lib/binance-pivot-monitor
 
 # 配置
 sudo vim /etc/binance-pivot-monitor/binance-pivot-monitor.env
 
 # 启动服务
-sudo systemctl enable binance-pivot-monitor
-sudo systemctl start binance-pivot-monitor
+sudo systemctl daemon-reload
+sudo systemctl enable --now binance-pivot-monitor
 ```
 
 ### 使用说明
