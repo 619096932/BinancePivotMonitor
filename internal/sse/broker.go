@@ -43,3 +43,10 @@ func (b *Broker[T]) Publish(msg T) {
 	}
 	b.mu.RUnlock()
 }
+
+// SubscriberCount returns the number of active subscribers.
+func (b *Broker[T]) SubscriberCount() int {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return len(b.clients)
+}

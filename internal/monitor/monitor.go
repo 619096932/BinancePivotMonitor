@@ -414,10 +414,17 @@ func (m *Monitor) checkPeriod(symbol string, period pivot.Period, prev, price fl
 		return
 	}
 
+	// Check all 11 pivot levels: PP, R1-R5, S1-S5
+	m.checkLevel(symbol, period, "PP", lv.PP, prev, price, ts)
+
+	m.checkLevel(symbol, period, "R1", lv.R1, prev, price, ts)
+	m.checkLevel(symbol, period, "R2", lv.R2, prev, price, ts)
 	m.checkLevel(symbol, period, "R3", lv.R3, prev, price, ts)
 	m.checkLevel(symbol, period, "R4", lv.R4, prev, price, ts)
 	m.checkLevel(symbol, period, "R5", lv.R5, prev, price, ts)
 
+	m.checkLevel(symbol, period, "S1", lv.S1, prev, price, ts)
+	m.checkLevel(symbol, period, "S2", lv.S2, prev, price, ts)
 	m.checkLevel(symbol, period, "S3", lv.S3, prev, price, ts)
 	m.checkLevel(symbol, period, "S4", lv.S4, prev, price, ts)
 	m.checkLevel(symbol, period, "S5", lv.S5, prev, price, ts)

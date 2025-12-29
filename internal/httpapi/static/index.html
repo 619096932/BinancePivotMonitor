@@ -51,19 +51,23 @@
             padding: 0
         }
 
-        html,
-        body {
+        html {
             height: 100%;
-            overflow: hidden
+            background: var(--bg)
         }
 
         body {
+            height: 100%;
+            /* JS 会设置 --vh，兜底用 100vh */
+            min-height: calc(var(--vh, 1vh) * 100);
+            margin: 0;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
             background: var(--bg);
             color: var(--text);
             -webkit-font-smoothing: antialiased;
             display: flex;
-            flex-direction: column
+            flex-direction: column;
+            overflow: hidden
         }
 
         /* 固定头部区域 */
@@ -81,17 +85,100 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 12px;
+            gap: 8px;
             padding: 10px 14px;
             border-radius: 8px;
             background: var(--card);
-            border: 1px solid var(--line)
+            border: 1px solid var(--line);
+            flex-wrap: nowrap
         }
 
         .title {
             font-weight: 700;
             font-size: 15px;
+            color: var(--text);
+            white-space: nowrap;
+            flex-shrink: 0
+        }
+
+        /* Header search input */
+        .header-search {
+            flex: 1;
+            min-width: 60px;
+            max-width: 120px;
+            padding: 6px 10px;
+            font-size: 12px;
+            background: var(--vessel);
+            border: 1px solid var(--line);
+            border-radius: 6px;
             color: var(--text)
+        }
+
+        .header-search::placeholder {
+            color: var(--text-tertiary);
+            font-size: 11px
+        }
+
+        .header-search:focus {
+            outline: none;
+            border-color: var(--yellow)
+        }
+
+        /* Header sound toggle */
+        .header-sound-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            background: var(--vessel);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background .15s
+        }
+
+        .header-sound-toggle:hover {
+            background: var(--tag-bg)
+        }
+
+        .header-sound-toggle input {
+            display: none
+        }
+
+        .header-sound-toggle .sound-icon {
+            font-size: 14px;
+            opacity: 1;
+            transition: opacity .15s
+        }
+
+        .header-sound-toggle input:not(:checked)+.sound-icon {
+            opacity: 0.4
+        }
+
+        @media(max-width:520px) {
+            .header-search {
+                max-width: 80px;
+                padding: 5px 8px;
+                font-size: 11px
+            }
+
+            .header-sound-toggle {
+                width: 28px;
+                height: 28px
+            }
+
+            .header-sound-toggle .sound-icon {
+                font-size: 12px
+            }
+
+            header {
+                gap: 6px;
+                padding: 8px 10px
+            }
+
+            .title {
+                font-size: 13px
+            }
         }
 
         /* Runtime stats */
@@ -304,11 +391,12 @@
             accent-color: var(--yellow)
         }
 
-        /* 滚动列表区域 - Clusterize 适配 */
+        /* 滚动列表区域 */
         .scroll-area {
             flex: 1;
             overflow: hidden;
-            padding-bottom: env(safe-area-inset-bottom)
+            /* 为底部 footer 留出空间 */
+            padding-bottom: calc(50px + env(safe-area-inset-bottom))
         }
 
         .scroll-content {
@@ -347,7 +435,7 @@
             color: var(--text-tertiary)
         }
 
-        /* 信号项 - 固定高度以支持虚拟滚动和避免 CLS */
+        /* 信号项 - 支持动态高度 */
         .item {
             background: var(--card);
             border: 1px solid var(--line);
@@ -355,11 +443,8 @@
             padding: 10px 12px;
             cursor: pointer;
             transition: background .15s;
-            height: 96px;
-            min-height: 96px;
-            max-height: 96px;
-            box-sizing: border-box;
-            overflow: hidden
+            min-height: 80px;
+            box-sizing: border-box
         }
 
         .item:hover {
@@ -591,6 +676,26 @@
             font-size: 12px
         }
 
+        /* 成交额过滤 */
+        .volume-filter {
+            display: inline-flex;
+            gap: 2px;
+            align-items: center
+        }
+
+        .volume-filter .input-sm {
+            width: 50px
+        }
+
+        .select-sm {
+            padding: 5px 4px;
+            font-size: 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-primary)
+        }
+
         @media(max-width:520px) {
             .price-info {
                 flex-wrap: wrap;
@@ -599,6 +704,10 @@
 
             .input-sm {
                 width: 60px
+            }
+
+            .volume-filter .input-sm {
+                width: 45px
             }
         }
 
@@ -827,6 +936,184 @@
                 margin: 10px
             }
         }
+
+        /* Pivot Preview Modal */
+        .pivot-period-toggle {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 8px
+        }
+
+        .pivot-period-btn {
+            flex: 1;
+            padding: 6px 12px;
+            font-size: 12px;
+            border: 1px solid var(--line);
+            background: var(--vessel);
+            color: var(--text-secondary);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all .15s
+        }
+
+        .pivot-period-btn.active {
+            background: var(--yellow);
+            color: #202630;
+            border-color: var(--yellow)
+        }
+
+        .pivot-levels-list {
+            max-height: 400px;
+            overflow-y: auto
+        }
+
+        .pivot-level {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 8px;
+            border-radius: 4px;
+            margin-bottom: 2px;
+            font-size: 12px
+        }
+
+        .pivot-level.resistance {
+            background: rgba(246, 70, 93, 0.1)
+        }
+
+        .pivot-level.support {
+            background: rgba(46, 189, 133, 0.1)
+        }
+
+        .pivot-level.pivot-point {
+            background: rgba(240, 185, 11, 0.15)
+        }
+
+        .pivot-level.current-price {
+            background: var(--yellow);
+            color: #202630;
+            font-weight: 600
+        }
+
+        .pivot-level .level-name {
+            font-weight: 600;
+            min-width: 30px
+        }
+
+        .pivot-level .level-price {
+            flex: 1;
+            text-align: right;
+            margin-right: 8px;
+            font-family: 'SF Mono', Monaco, monospace
+        }
+
+        .pivot-level .level-pct {
+            min-width: 60px;
+            text-align: right;
+            font-family: 'SF Mono', Monaco, monospace
+        }
+
+        .pivot-level .level-pct.pct-up {
+            color: var(--buy)
+        }
+
+        .pivot-level .level-pct.pct-down {
+            color: var(--sell)
+        }
+
+        /* Pivot level display in signal items */
+        .pivot-up {
+            color: var(--sell);
+            font-size: 11px
+        }
+
+        .pivot-down {
+            color: var(--buy);
+            font-size: 11px
+        }
+
+        .pivot-info {
+            display: flex;
+            gap: 8px;
+            margin-top: 4px;
+            font-size: 11px
+        }
+
+        /* Pivot levels row in signal items */
+        .pivot-levels-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 4px;
+            font-size: 11px;
+            flex-wrap: wrap
+        }
+
+        .pivot-levels-row:empty {
+            display: none
+        }
+
+        .pivot-pair {
+            display: inline-flex;
+            gap: 6px
+        }
+
+        /* 底部系统信息栏 */
+        .footer-stats {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg);
+            border-top: 1px solid var(--line);
+            padding: 8px 12px;
+            /* iOS safe area 底部填充 */
+            padding-bottom: calc(8px + env(safe-area-inset-bottom));
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            color: var(--text-secondary);
+            z-index: 100
+        }
+
+        .footer-stats .stat-group {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap
+        }
+
+        .footer-stats .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 4px
+        }
+
+        .footer-stats .stat-label {
+            color: var(--text-tertiary)
+        }
+
+        .footer-stats .stat-value {
+            color: var(--text);
+            font-weight: 500
+        }
+
+        .footer-stats .version {
+            color: var(--text-tertiary);
+            font-size: 10px
+        }
+
+        @media(max-width:520px) {
+            .footer-stats {
+                flex-direction: column;
+                gap: 4px;
+                padding: 6px 8px;
+                padding-bottom: calc(6px + env(safe-area-inset-bottom))
+            }
+
+            .footer-stats .stat-group {
+                gap: 10px
+            }
+        }
     </style>
 </head>
 
@@ -835,16 +1122,19 @@
     <div class="header-area">
         <header>
             <div class="title">Pivot Monitor</div>
+            <input id="symbol" type="text" class="header-search" placeholder="Symbol" />
             <div class="runtime-stats" id="runtimeStats" title="Click to refresh">
                 <span class="stat"><span class="stat-label">G</span><span id="rtGoroutines">-</span></span>
                 <span class="stat"><span class="stat-label">K</span><span id="rtKlines">-</span></span>
                 <span class="stat"><span class="stat-label">S</span><span id="rtSignals">-</span></span>
                 <span class="stat"><span class="stat-label">M</span><span id="rtHeap">-</span></span>
             </div>
-            <div class="row">
-                <span id="status" class="pill">disconnected</span>
-                <button id="refresh" type="button">Refresh</button>
-            </div>
+            <label class="header-sound-toggle" title="Sound Alert">
+                <input type="checkbox" id="soundEnabled" checked />
+                <span class="sound-icon">🔔</span>
+            </label>
+            <span id="status" class="pill">disconnected</span>
+            <button id="refresh" type="button">Refresh</button>
         </header>
         <div class="pivot-status">
             <div class="row">
@@ -854,7 +1144,6 @@
         </div>
         <div class="controls">
             <div class="row">
-                <input id="symbol" type="text" placeholder="Symbol ($BTC=exact)" style="flex:1;min-width:100px" />
                 <select id="period">
                     <option value="">All</option>
                     <option value="1d">1d</option>
@@ -873,13 +1162,26 @@
                     <option value="10000">10000</option>
                 </select>
                 <input id="minDiff" type="number" class="input-sm" placeholder="Diff%" min="0" step="0.1" />
+                <div class="volume-filter">
+                    <input id="minVolume" type="number" class="input-sm" placeholder="Vol" min="0" step="1" />
+                    <select id="volumeUnit" class="select-sm">
+                        <option value="M" selected>M</option>
+                        <option value="K">K</option>
+                        <option value="B">B</option>
+                    </select>
+                </div>
             </div>
             <div class="row">
                 <span style="font-size:11px;color:var(--text-secondary)">Levels:</span>
                 <div class="level-btns" id="filterLevels">
+                    <button type="button" data-level="PP">PP</button>
+                    <button type="button" data-level="R1">R1</button>
+                    <button type="button" data-level="R2">R2</button>
                     <button type="button" data-level="R3">R3</button>
                     <button type="button" data-level="R4">R4</button>
                     <button type="button" data-level="R5">R5</button>
+                    <button type="button" data-level="S1">S1</button>
+                    <button type="button" data-level="S2">S2</button>
                     <button type="button" data-level="S3">S3</button>
                     <button type="button" data-level="S4">S4</button>
                     <button type="button" data-level="S5">S5</button>
@@ -888,14 +1190,18 @@
             <div class="row">
                 <span style="font-size:11px;color:var(--text-secondary)">Sound:</span>
                 <div class="level-btns" id="soundLevels">
+                    <button type="button" data-level="PP">PP</button>
+                    <button type="button" data-level="R1">R1</button>
+                    <button type="button" data-level="R2">R2</button>
                     <button type="button" data-level="R3">R3</button>
                     <button type="button" data-level="R4">R4</button>
                     <button type="button" data-level="R5">R5</button>
+                    <button type="button" data-level="S1">S1</button>
+                    <button type="button" data-level="S2">S2</button>
                     <button type="button" data-level="S3">S3</button>
                     <button type="button" data-level="S4">S4</button>
                     <button type="button" data-level="S5">S5</button>
                 </div>
-                <label class="sound-toggle"><input type="checkbox" id="soundEnabled" checked /> On</label>
             </div>
         </div>
         <div class="row" style="margin-top:6px;justify-content:space-between">
@@ -1007,12 +1313,63 @@
     <!-- 操作菜单 -->
     <div id="actionMenu" class="action-menu">
         <div class="action-menu-item" data-action="trade">🚀 Jump to Trade</div>
+        <div class="action-menu-item" data-action="pivots">📊 Pivot Levels</div>
         <div class="action-menu-item" data-action="copy">📋 Copy Symbol</div>
         <div class="action-menu-item" data-action="filter">🔍 Filter Symbol</div>
         <div class="action-menu-item" data-action="signals" style="display:none">📊 Show Signals</div>
     </div>
+    <!-- Pivot Preview Modal -->
+    <div id="pivotModal" class="pattern-modal" style="display:none">
+        <div class="pattern-modal-content" style="width:280px">
+            <div class="modal-header">
+                <span id="pivotModalSymbol" class="symbol"></span>
+                <span class="pattern-name">Pivot Levels</span>
+                <button class="close-btn" onclick="hidePivotModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding:8px 12px">
+                <div class="pivot-period-toggle">
+                    <button class="pivot-period-btn active" data-period="1d"
+                        onclick="switchPivotPeriod('1d')">日线</button>
+                    <button class="pivot-period-btn" data-period="1w" onclick="switchPivotPeriod('1w')">周线</button>
+                </div>
+                <div id="pivotLevelsList" class="pivot-levels-list"></div>
+            </div>
+        </div>
+    </div>
     <!-- Toast -->
     <div id="toast" class="toast"></div>
+    <!-- 底部系统信息栏 -->
+    <div class="footer-stats" id="footerStats">
+        <div class="stat-group">
+            <div class="stat-item">
+                <span class="stat-label">SSE:</span>
+                <span class="stat-value" id="ftSSE">-</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Goroutines:</span>
+                <span class="stat-value" id="ftGoroutines">-</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Heap:</span>
+                <span class="stat-value" id="ftHeap">-</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Symbols:</span>
+                <span class="stat-value" id="ftSymbols">-</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Signals:</span>
+                <span class="stat-value" id="ftSignals">-</span>
+            </div>
+        </div>
+        <div class="stat-group">
+            <div class="stat-item">
+                <span class="stat-label">Uptime:</span>
+                <span class="stat-value" id="ftUptime">-</span>
+            </div>
+            <div class="stat-item version" id="ftVersion">-</div>
+        </div>
+    </div>
     <!-- Clusterize.js -->
     <script src="https://cdn.bootcdn.net/ajax/libs/clusterize.js/0.19.0/clusterize.min.js"></script>
     <script src="/static/app.js"></script>

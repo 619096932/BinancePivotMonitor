@@ -27,6 +27,7 @@ type Server struct {
 	History        *signalpkg.History
 	AllowedOrigins []string
 	PivotStatus    PivotStatusProvider
+	PivotStore     *pivot.Store
 	TickerStore    *ticker.Store
 	TickerMonitor  *ticker.Monitor
 
@@ -52,6 +53,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/sse", s.handleSSE)
 	mux.HandleFunc("/api/history", s.handleHistory)
 	mux.HandleFunc("/api/pivot-status", s.handlePivotStatus)
+	mux.HandleFunc("/api/pivots/", s.handlePivots)
 	mux.HandleFunc("/api/tickers", s.handleTickers)
 	mux.HandleFunc("/api/patterns", s.handlePatterns)
 	mux.HandleFunc("/api/klines", s.handleKlines)
@@ -205,16 +207,21 @@ func (s *Server) handleKlineStats(w http.ResponseWriter, r *http.Request) {
 
 // RuntimeStats contains runtime statistics.
 type RuntimeStats struct {
-	Goroutines   int     `json:"goroutines"`
-	HeapMB       float64 `json:"heap_mb"`
-	SysMB        float64 `json:"sys_mb"`
-	NumGC        uint32  `json:"num_gc"`
-	KlineSymbols int     `json:"kline_symbols"`
-	Patterns     int     `json:"patterns"`
-	Signals      int     `json:"signals"`
-	Symbols      int     `json:"symbols"` // unique symbols in signal history
-	Uptime       string  `json:"uptime"`
+	Goroutines     int     `json:"goroutines"`
+	HeapMB         float64 `json:"heap_mb"`
+	SysMB          float64 `json:"sys_mb"`
+	NumGC          uint32  `json:"num_gc"`
+	KlineSymbols   int     `json:"kline_symbols"`
+	Patterns       int     `json:"patterns"`
+	Signals        int     `json:"signals"`
+	Symbols        int     `json:"symbols"` // unique symbols in signal history
+	Uptime         string  `json:"uptime"`
+	SSESubscribers int     `json:"sse_subscribers"`
+	Version        string  `json:"version"`
 }
+
+// Version can be set at build time via -ldflags
+var Version = "dev"
 
 var startTime = time.Now()
 
@@ -239,6 +246,7 @@ func (s *Server) handleRuntime(w http.ResponseWriter, r *http.Request) {
 		SysMB:      float64(m.Sys) / 1024 / 1024,
 		NumGC:      m.NumGC,
 		Uptime:     time.Since(startTime).Round(time.Second).String(),
+		Version:    Version,
 	}
 
 	if s.KlineStore != nil {
@@ -250,6 +258,9 @@ func (s *Server) handleRuntime(w http.ResponseWriter, r *http.Request) {
 	if s.History != nil {
 		stats.Signals = s.History.Count()
 		stats.Symbols = s.History.SymbolCount()
+	}
+	if s.SignalBroker != nil {
+		stats.SSESubscribers = s.SignalBroker.SubscriberCount()
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -272,6 +283,72 @@ func (s *Server) handlePivotStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := s.PivotStatus.PivotStatus()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// PivotResponse is the response for /api/pivots/{symbol}
+type PivotResponse struct {
+	Symbol string        `json:"symbol"`
+	Daily  *pivot.Levels `json:"daily,omitempty"`
+	Weekly *pivot.Levels `json:"weekly,omitempty"`
+}
+
+// handlePivots returns pivot levels for a specific symbol.
+// GET /api/pivots/{symbol}?period=1d|1w (optional, returns both if omitted)
+func (s *Server) handlePivots(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.PivotStore == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"error":"pivot store not available"}`))
+		return
+	}
+
+	// Extract symbol from path: /api/pivots/{symbol}
+	path := strings.TrimPrefix(r.URL.Path, "/api/pivots/")
+	symbol := strings.ToUpper(strings.TrimSpace(path))
+	if symbol == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"error":"symbol parameter required"}`))
+		return
+	}
+
+	q := r.URL.Query()
+	period := strings.ToLower(q.Get("period"))
+
+	resp := PivotResponse{Symbol: symbol}
+
+	// Get daily levels
+	if period == "" || period == "1d" || period == "daily" {
+		if levels, ok := s.PivotStore.GetLevels(pivot.PeriodDaily, symbol); ok {
+			resp.Daily = &levels
+		}
+	}
+
+	// Get weekly levels
+	if period == "" || period == "1w" || period == "weekly" {
+		if levels, ok := s.PivotStore.GetLevels(pivot.PeriodWeekly, symbol); ok {
+			resp.Weekly = &levels
+		}
+	}
+
+	// Return 404 if no data found
+	if resp.Daily == nil && resp.Weekly == nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"error":"no pivot data found for symbol"}`))
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
 }

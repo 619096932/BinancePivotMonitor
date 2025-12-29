@@ -93,12 +93,18 @@
     let tickerData = new Map();  // Ticker 数据
     let symbolRanking = { volume: new Map(), trades: new Map() };
 
+    // 枢轴点缓存 (5分钟过期)
+    const pivotCache = new Map(); // symbol -> { data, timestamp }
+    const PIVOT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
     let selectedLevels = new Set();
     let soundLevels = new Set(["R4", "R5", "S4", "S5"]);
     let currentView = 'signals';
     let menuSymbol = null;
     let menuFromRanking = false;
     let currentPatternSignal = null; // 当前显示详情的形态信号
+    let currentPivotPreviewSymbol = null; // 当前预览的交易对
+    let currentPivotPreviewPeriod = '1d'; // 当前预览的周期
 
     // Clusterize 实例
     let signalCluster = null;
@@ -110,7 +116,12 @@
         soundLevels: "pivot_sound_levels",
         soundEnabled: "pivot_sound_enabled",
         limit: "pivot_limit",
-        minDiff: "pivot_min_diff"
+        minDiff: "pivot_min_diff",
+        minVolume: "pivot_min_volume",
+        volumeUnit: "pivot_volume_unit",
+        filterLevels: "pivot_filter_levels",
+        filterPeriod: "pivot_filter_period",
+        filterDirection: "pivot_filter_direction"
     };
 
     // ==================== 工具函数 ====================
@@ -144,6 +155,25 @@
 
             const minDiff = localStorage.getItem(STORAGE_KEYS.minDiff);
             if (minDiff) $("minDiff").value = minDiff;
+
+            const minVolume = localStorage.getItem(STORAGE_KEYS.minVolume);
+            if (minVolume) $("minVolume").value = minVolume;
+
+            const volumeUnit = localStorage.getItem(STORAGE_KEYS.volumeUnit);
+            if (volumeUnit) $("volumeUnit").value = volumeUnit;
+
+            // 恢复过滤器 Levels
+            const filterLevels = localStorage.getItem(STORAGE_KEYS.filterLevels);
+            if (filterLevels) {
+                selectedLevels = new Set(JSON.parse(filterLevels));
+            }
+
+            // 恢复 Period 和 Direction
+            const filterPeriod = localStorage.getItem(STORAGE_KEYS.filterPeriod);
+            if (filterPeriod) $("period").value = filterPeriod;
+
+            const filterDirection = localStorage.getItem(STORAGE_KEYS.filterDirection);
+            if (filterDirection) $("direction").value = filterDirection;
         } catch (_) { }
     }
 
@@ -155,7 +185,29 @@
             const minDiff = $("minDiff").value;
             if (minDiff) localStorage.setItem(STORAGE_KEYS.minDiff, minDiff);
             else localStorage.removeItem(STORAGE_KEYS.minDiff);
+
+            const minVolume = $("minVolume").value;
+            if (minVolume) localStorage.setItem(STORAGE_KEYS.minVolume, minVolume);
+            else localStorage.removeItem(STORAGE_KEYS.minVolume);
+
+            localStorage.setItem(STORAGE_KEYS.volumeUnit, $("volumeUnit").value);
+
+            // 保存过滤器 Levels
+            localStorage.setItem(STORAGE_KEYS.filterLevels, JSON.stringify(Array.from(selectedLevels)));
+
+            // 保存 Period 和 Direction
+            localStorage.setItem(STORAGE_KEYS.filterPeriod, $("period").value);
+            localStorage.setItem(STORAGE_KEYS.filterDirection, $("direction").value);
         } catch (_) { }
+    }
+
+    // ==================== 成交额过滤 ====================
+    const VOLUME_UNITS = { K: 1e3, M: 1e6, B: 1e9 };
+
+    function parseVolumeInput() {
+        const value = parseFloat($("minVolume").value) || 0;
+        const unit = $("volumeUnit").value || 'M';
+        return value * (VOLUME_UNITS[unit] || 1e6);
     }
 
     // ==================== 过滤逻辑 ====================
@@ -165,7 +217,8 @@
             period: $("period").value,
             levels: Array.from(selectedLevels),
             direction: $("direction").value,
-            minDiff: parseFloat($("minDiff").value) || 0
+            minDiff: parseFloat($("minDiff").value) || 0,
+            minVolume: parseVolumeInput()
         };
     }
 
@@ -200,6 +253,14 @@
             if (ticker && signal.price > 0) {
                 const diffPct = Math.abs((ticker.last_price - signal.price) / signal.price * 100);
                 if (diffPct < filters.minDiff) return false;
+            }
+        }
+
+        // 成交额过滤
+        if (filters.minVolume > 0) {
+            const ticker = tickerData.get(signal.symbol);
+            if (!ticker || (ticker.quote_volume || 0) < filters.minVolume) {
+                return false;
             }
         }
 
@@ -352,6 +413,7 @@
                     <div class="muted time-rel">${fmtRelTime(signal.triggered_at)}</div>
                 </div>
                 ${tickerHtml}
+                <div class="pivot-levels-row" data-symbol="${signal.symbol}"></div>
             </div>
         `;
     }
@@ -540,8 +602,160 @@
         }
     }
 
+    // ==================== Intersection Observer for Pivot Levels ====================
+    const visibleSymbols = new Set();
+    let pivotObserver = null;
+    let pendingPivotSymbols = new Set(); // 待获取枢轴点的交易对
+    let pivotFetchTimer = null;
+    const PIVOT_FETCH_DEBOUNCE = 300; // 防抖延迟
+
+    function initPivotObserver() {
+        if (pivotObserver) return;
+
+        pivotObserver = new IntersectionObserver((entries) => {
+            let needsFetch = false;
+            entries.forEach(entry => {
+                const item = entry.target;
+                const symbol = item.dataset.symbol;
+                if (!symbol) return;
+
+                if (entry.isIntersecting) {
+                    visibleSymbols.add(symbol);
+                    // 检查是否需要获取枢轴点数据
+                    if (!pivotCache.has(symbol)) {
+                        pendingPivotSymbols.add(symbol);
+                        needsFetch = true;
+                    } else {
+                        // 已有缓存，直接更新
+                        updateItemPivotLevelsSync(item, symbol);
+                    }
+                } else {
+                    visibleSymbols.delete(symbol);
+                    pendingPivotSymbols.delete(symbol);
+                }
+            });
+
+            // 防抖批量获取
+            if (needsFetch) {
+                schedulePivotFetch();
+            }
+        }, { threshold: 0.1, rootMargin: '50px' });
+    }
+
+    function schedulePivotFetch() {
+        if (pivotFetchTimer) clearTimeout(pivotFetchTimer);
+        pivotFetchTimer = setTimeout(async () => {
+            pivotFetchTimer = null;
+            if (pendingPivotSymbols.size === 0) return;
+
+            // 批量获取（目前 API 是单个获取，但我们可以并行请求）
+            const symbols = Array.from(pendingPivotSymbols);
+            pendingPivotSymbols.clear();
+
+            // 并行获取所有待处理的交易对
+            await Promise.all(symbols.map(async (symbol) => {
+                if (!visibleSymbols.has(symbol)) return; // 已滚出可视区域
+                await getPivotData(symbol);
+            }));
+
+            // 更新所有可视项的枢轴点位
+            updateAllVisiblePivotLevels();
+        }, PIVOT_FETCH_DEBOUNCE);
+    }
+
+    function updateAllVisiblePivotLevels() {
+        document.querySelectorAll("#signalList .item[data-symbol]").forEach(item => {
+            const symbol = item.dataset.symbol;
+            if (visibleSymbols.has(symbol)) {
+                updateItemPivotLevelsSync(item, symbol);
+            }
+        });
+    }
+
+    // 同步版本，使用已缓存的数据
+    function updateItemPivotLevelsSync(item, symbol) {
+        const pivotRow = item.querySelector('.pivot-levels-row');
+        if (!pivotRow) return;
+
+        const ticker = tickerData.get(symbol);
+        if (!ticker || !ticker.last_price) {
+            pivotRow.innerHTML = '';
+            return;
+        }
+
+        const cached = pivotCache.get(symbol);
+        if (!cached || !cached.data) {
+            pivotRow.innerHTML = '';
+            return;
+        }
+
+        const pivotData = cached.data;
+        const currentPrice = ticker.last_price;
+
+        // 日级点位
+        const dailyLevels = findNearestLevels(pivotData, currentPrice, '1d');
+        const dailyAbove = formatPivotLevel(dailyLevels.above, currentPrice, '1d');
+        const dailyBelow = formatPivotLevel(dailyLevels.below, currentPrice, '1d');
+
+        // 周级点位
+        const weeklyLevels = findNearestLevels(pivotData, currentPrice, '1w');
+        const weeklyAbove = formatPivotLevel(weeklyLevels.above, currentPrice, '1w');
+        const weeklyBelow = formatPivotLevel(weeklyLevels.below, currentPrice, '1w');
+
+        let html = '';
+        if (dailyAbove || dailyBelow) {
+            html += `<span class="pivot-pair">${dailyAbove} ${dailyBelow}</span>`;
+        }
+        if (weeklyAbove || weeklyBelow) {
+            html += `<span class="pivot-pair">${weeklyAbove} ${weeklyBelow}</span>`;
+        }
+
+        pivotRow.innerHTML = html;
+    }
+
+    async function updateItemPivotLevels(item, symbol) {
+        const pivotRow = item.querySelector('.pivot-levels-row');
+        if (!pivotRow) return;
+
+        const ticker = tickerData.get(symbol);
+        if (!ticker || !ticker.last_price) {
+            pivotRow.innerHTML = '';
+            return;
+        }
+
+        const pivotData = await getPivotData(symbol);
+        if (!pivotData) {
+            pivotRow.innerHTML = '';
+            return;
+        }
+
+        const currentPrice = ticker.last_price;
+
+        // 日级点位
+        const dailyLevels = findNearestLevels(pivotData, currentPrice, '1d');
+        const dailyAbove = formatPivotLevel(dailyLevels.above, currentPrice, '1d');
+        const dailyBelow = formatPivotLevel(dailyLevels.below, currentPrice, '1d');
+
+        // 周级点位
+        const weeklyLevels = findNearestLevels(pivotData, currentPrice, '1w');
+        const weeklyAbove = formatPivotLevel(weeklyLevels.above, currentPrice, '1w');
+        const weeklyBelow = formatPivotLevel(weeklyLevels.below, currentPrice, '1w');
+
+        let html = '';
+        if (dailyAbove || dailyBelow) {
+            html += `<span class="pivot-pair">${dailyAbove} ${dailyBelow}</span>`;
+        }
+        if (weeklyAbove || weeklyBelow) {
+            html += `<span class="pivot-pair">${weeklyAbove} ${weeklyBelow}</span>`;
+        }
+
+        pivotRow.innerHTML = html;
+    }
+
     // ==================== 事件绑定 ====================
     function bindSignalItemEvents() {
+        initPivotObserver();
+
         document.querySelectorAll("#signalList .item").forEach(item => {
             item.onclick = (e) => {
                 e.preventDefault();
@@ -549,6 +763,11 @@
                 menuFromRanking = false;
                 showActionMenu(e, item.dataset.symbol);
             };
+
+            // 观察可视状态以更新枢轴点位
+            if (pivotObserver) {
+                pivotObserver.observe(item);
+            }
         });
     }
 
@@ -617,6 +836,120 @@
 
     // 暴露到全局以便 HTML onclick 调用
     window.hidePatternModal = hidePatternModal;
+
+    // ==================== 枢轴点预览 Modal ====================
+    async function showPivotPreview(symbol) {
+        currentPivotPreviewSymbol = symbol;
+        const pivotData = await getPivotData(symbol);
+        if (!pivotData) {
+            showToast('No pivot data for ' + symbol);
+            return;
+        }
+
+        const modal = $("pivotModal");
+        if (!modal) return;
+
+        $("pivotModalSymbol").textContent = symbol;
+        renderPivotPreview(pivotData, currentPivotPreviewPeriod);
+        modal.style.display = 'flex';
+    }
+
+    function renderPivotPreview(pivotData, period) {
+        const container = $("pivotLevelsList");
+        if (!container) return;
+
+        const levels = period === '1w' ? pivotData.weekly : pivotData.daily;
+        if (!levels) {
+            container.innerHTML = '<div class="no-data">No data</div>';
+            return;
+        }
+
+        const ticker = tickerData.get(currentPivotPreviewSymbol);
+        const currentPrice = ticker ? ticker.last_price : 0;
+
+        // 构建所有点位数组
+        const allLevels = [
+            { name: 'R5', price: levels.r5, type: 'resistance' },
+            { name: 'R4', price: levels.r4, type: 'resistance' },
+            { name: 'R3', price: levels.r3, type: 'resistance' },
+            { name: 'R2', price: levels.r2, type: 'resistance' },
+            { name: 'R1', price: levels.r1, type: 'resistance' },
+            { name: 'PP', price: levels.pp, type: 'pivot' },
+            { name: 'S1', price: levels.s1, type: 'support' },
+            { name: 'S2', price: levels.s2, type: 'support' },
+            { name: 'S3', price: levels.s3, type: 'support' },
+            { name: 'S4', price: levels.s4, type: 'support' },
+            { name: 'S5', price: levels.s5, type: 'support' },
+        ].filter(l => l.price > 0);
+
+        // 按价格降序排列
+        allLevels.sort((a, b) => b.price - a.price);
+
+        // 找到当前价格应该插入的位置
+        let currentPriceInserted = false;
+        let html = '';
+
+        for (let i = 0; i < allLevels.length; i++) {
+            const level = allLevels[i];
+            const pct = currentPrice > 0 ? ((level.price - currentPrice) / currentPrice * 100) : 0;
+            const pctStr = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+
+            // 在适当位置插入当前价格
+            if (!currentPriceInserted && currentPrice > 0 && level.price < currentPrice) {
+                html += `<div class="pivot-level current-price">
+                    <span class="level-name">当前价格</span>
+                    <span class="level-price">${fmtPrice(currentPrice)}</span>
+                    <span class="level-pct">--</span>
+                </div>`;
+                currentPriceInserted = true;
+            }
+
+            const typeClass = level.type === 'resistance' ? 'resistance' :
+                level.type === 'support' ? 'support' : 'pivot-point';
+            const pctClass = pct >= 0 ? 'pct-up' : 'pct-down';
+
+            html += `<div class="pivot-level ${typeClass}">
+                <span class="level-name">${level.name}</span>
+                <span class="level-price">${fmtPrice(level.price)}</span>
+                <span class="level-pct ${pctClass}">${pctStr}</span>
+            </div>`;
+        }
+
+        // 如果当前价格低于所有点位
+        if (!currentPriceInserted && currentPrice > 0) {
+            html += `<div class="pivot-level current-price">
+                <span class="level-name">当前价格</span>
+                <span class="level-price">${fmtPrice(currentPrice)}</span>
+                <span class="level-pct">--</span>
+            </div>`;
+        }
+
+        container.innerHTML = html;
+
+        // 更新周期按钮状态
+        document.querySelectorAll('.pivot-period-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.period === period);
+        });
+    }
+
+    function hidePivotModal() {
+        const modal = $("pivotModal");
+        if (modal) modal.style.display = 'none';
+        currentPivotPreviewSymbol = null;
+    }
+
+    function switchPivotPeriod(period) {
+        currentPivotPreviewPeriod = period;
+        if (currentPivotPreviewSymbol) {
+            getPivotData(currentPivotPreviewSymbol).then(data => {
+                if (data) renderPivotPreview(data, period);
+            });
+        }
+    }
+
+    // 暴露到全局
+    window.hidePivotModal = hidePivotModal;
+    window.switchPivotPeriod = switchPivotPeriod;
 
     // ==================== 操作菜单 ====================
     function showActionMenu(e, symbol) {
@@ -710,6 +1043,11 @@
                         updateView();
                         showToast("Showing signals for " + menuSymbol);
                         break;
+
+                    case "pivots":
+                        // 显示枢轴点预览
+                        showPivotPreview(menuSymbol);
+                        break;
                 }
                 hideActionMenu();
             });
@@ -729,6 +1067,7 @@
                     selectedLevels.add(l);
                     b.classList.add("active");
                 }
+                saveSettings();
                 applyFilters();
                 updateView();
             });
@@ -758,6 +1097,12 @@
         });
     }
 
+    function updateFilterLevelBtns() {
+        document.querySelectorAll("#filterLevels button").forEach(b => {
+            b.classList.toggle("active", selectedLevels.has(b.dataset.level));
+        });
+    }
+
     function setupTabs() {
         document.querySelectorAll(".tab").forEach(t => {
             t.addEventListener("click", () => {
@@ -778,13 +1123,22 @@
         }, 200);
 
         $("symbol").oninput = debouncedFilter;
-        $("period").onchange = () => { applyFilters(); updateView(); };
-        $("direction").onchange = () => { applyFilters(); updateView(); };
+        $("period").onchange = () => { saveSettings(); applyFilters(); updateView(); };
+        $("direction").onchange = () => { saveSettings(); applyFilters(); updateView(); };
         $("minDiff").oninput = debounce(() => {
             saveSettings();
             applyFilters();
             updateView();
         }, 300);
+
+        // 成交额过滤
+        const debouncedVolumeFilter = debounce(() => {
+            saveSettings();
+            applyFilters();
+            updateView();
+        }, 300);
+        $("minVolume").oninput = debouncedVolumeFilter;
+        $("volumeUnit").onchange = debouncedVolumeFilter;
 
         // Limit 变更需要重新请求后端
         $("limit").onchange = () => {
@@ -889,6 +1243,74 @@
     }
 
     // ==================== 数据加载 ====================
+
+    // 获取枢轴点数据（带缓存）
+    async function getPivotData(symbol) {
+        const now = Date.now();
+        const cached = pivotCache.get(symbol);
+        if (cached && (now - cached.timestamp) < PIVOT_CACHE_TTL) {
+            return cached.data;
+        }
+
+        try {
+            const r = await fetch(`/api/pivots/${symbol}`);
+            if (!r.ok) return null;
+            const data = await r.json();
+            pivotCache.set(symbol, { data, timestamp: now });
+            return data;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    // 查找当前价格上下方最近的点位
+    function findNearestLevels(pivotData, currentPrice, period) {
+        if (!pivotData || !currentPrice) return { above: null, below: null };
+
+        const levels = period === '1w' ? pivotData.weekly : pivotData.daily;
+        if (!levels) return { above: null, below: null };
+
+        const allLevels = [
+            { name: 'R5', price: levels.r5 },
+            { name: 'R4', price: levels.r4 },
+            { name: 'R3', price: levels.r3 },
+            { name: 'R2', price: levels.r2 },
+            { name: 'R1', price: levels.r1 },
+            { name: 'PP', price: levels.pp },
+            { name: 'S1', price: levels.s1 },
+            { name: 'S2', price: levels.s2 },
+            { name: 'S3', price: levels.s3 },
+            { name: 'S4', price: levels.s4 },
+            { name: 'S5', price: levels.s5 },
+        ].filter(l => l.price > 0);
+
+        let above = null, below = null;
+        let aboveDiff = Infinity, belowDiff = Infinity;
+
+        for (const level of allLevels) {
+            const diff = level.price - currentPrice;
+            if (diff > 0 && diff < aboveDiff) {
+                aboveDiff = diff;
+                above = level;
+            } else if (diff < 0 && Math.abs(diff) < belowDiff) {
+                belowDiff = Math.abs(diff);
+                below = level;
+            }
+        }
+
+        return { above, below };
+    }
+
+    // 格式化枢轴点位显示
+    function formatPivotLevel(level, currentPrice, period) {
+        if (!level || !currentPrice) return '';
+        const pct = ((level.price - currentPrice) / currentPrice * 100);
+        const pctStr = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%';
+        const colorClass = pct >= 0 ? 'pivot-up' : 'pivot-down';
+        const periodLabel = period === '1w' ? '周' : '日';
+        return `<span class="${colorClass}">${periodLabel}:${level.name}(${pctStr})</span>`;
+    }
+
     async function loadHistory() {
         const limit = $("limit").value || 1000;
         $("hint").textContent = "Loading...";
@@ -941,6 +1363,7 @@
             if (!r.ok) return;
             const d = await r.json();
 
+            // 头部简要信息
             $("rtGoroutines").textContent = d.goroutines || '-';
             $("rtKlines").textContent = d.kline_symbols || '-';
             // 显示 "交易对/信号数" 格式
@@ -948,6 +1371,23 @@
             const signals = d.signals || 0;
             $("rtSignals").textContent = symbols + '/' + signals;
             $("rtHeap").textContent = d.heap_mb ? d.heap_mb.toFixed(0) : '-';
+
+            // 底部详细信息
+            const ftSSE = $("ftSSE");
+            const ftGoroutines = $("ftGoroutines");
+            const ftHeap = $("ftHeap");
+            const ftSymbols = $("ftSymbols");
+            const ftSignals = $("ftSignals");
+            const ftUptime = $("ftUptime");
+            const ftVersion = $("ftVersion");
+
+            if (ftSSE) ftSSE.textContent = d.sse_subscribers || 0;
+            if (ftGoroutines) ftGoroutines.textContent = d.goroutines || '-';
+            if (ftHeap) ftHeap.textContent = d.heap_mb ? d.heap_mb.toFixed(1) + 'MB' : '-';
+            if (ftSymbols) ftSymbols.textContent = symbols;
+            if (ftSignals) ftSignals.textContent = signals;
+            if (ftUptime) ftUptime.textContent = d.uptime || '-';
+            if (ftVersion) ftVersion.textContent = d.version ? 'v' + d.version : '';
         } catch (_) { }
     }
 
@@ -1151,10 +1591,29 @@
                     <span class="volume">${fmtVolume(ticker.quote_volume)}</span>
                     <span class="trades">${fmtTradeCount(ticker.trade_count)} trades</span>
                 `;
+
+                // 更新枢轴点位（仅可视项，使用同步版本）
+                if (visibleSymbols.has(symbol)) {
+                    updateItemPivotLevelsSync(item, symbol);
+                }
             });
+
+            // 更新枢轴点预览 Modal（如果打开）
+            updatePivotPreviewIfOpen();
         } else {
             // 排行榜视图：重新计算并更新
             updateRankingList();
+        }
+    }
+
+    // 更新枢轴点预览 Modal（实时价格更新）
+    function updatePivotPreviewIfOpen() {
+        const modal = $("pivotModal");
+        if (!modal || modal.style.display === 'none' || !currentPivotPreviewSymbol) return;
+
+        const cached = pivotCache.get(currentPivotPreviewSymbol);
+        if (cached && cached.data) {
+            renderPivotPreview(cached.data, currentPivotPreviewPeriod);
         }
     }
 
@@ -1189,13 +1648,33 @@
     };
 
     // ==================== 初始化 ====================
+    // iOS PWA 真实视口高度设置
+    let initialVh = 0; // 记录初始视口高度
+
+    function setVh() {
+        const vh = (window.visualViewport?.height || window.innerHeight) * 0.01;
+        // 首次设置时记录初始高度
+        if (initialVh === 0) {
+            initialVh = vh;
+        }
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+    }
+
     function calcScrollHeight() {
         const headerArea = document.querySelector('.header-area');
+        const footerStats = $("footerStats");
         if (!headerArea) return;
 
         const headerHeight = headerArea.offsetHeight;
-        const viewportHeight = window.innerHeight;
-        const availableHeight = Math.max(200, viewportHeight - headerHeight - 24);
+        const footerHeight = footerStats ? footerStats.offsetHeight : 40;
+
+        // 使用 visualViewport 获取真实可视高度（iOS PWA 兼容）
+        const viewportHeight = window.visualViewport
+            ? window.visualViewport.height
+            : window.innerHeight;
+
+        // 考虑底部栏高度
+        const availableHeight = Math.max(200, viewportHeight - headerHeight - footerHeight - 8);
 
         $("signalScroll").style.height = availableHeight + 'px';
         $("patternScroll").style.height = availableHeight + 'px';
@@ -1207,9 +1686,28 @@
         if (rankingCluster) rankingCluster.refresh();
     }
 
+    // iOS 键盘收起后恢复布局
+    function handleViewportResize() {
+        const currentVh = (window.visualViewport?.height || window.innerHeight) * 0.01;
+
+        // 如果视口高度恢复到接近初始值，说明键盘收起了
+        if (initialVh > 0 && currentVh >= initialVh * 0.95) {
+            // 使用初始高度，避免键盘影响
+            document.documentElement.style.setProperty('--vh', `${initialVh}px`);
+        } else {
+            setVh();
+        }
+
+        calcScrollHeight();
+    }
+
     function init() {
+        // 立即设置 --vh 变量（iOS PWA 关键）
+        setVh();
+
         loadSettings();
         updateSoundLevelBtns();
+        updateFilterLevelBtns();
         setupLevelBtns();
         setupTabs();
         setupFilters();
@@ -1222,6 +1720,24 @@
             calcScrollHeight();
         });
         window.addEventListener('resize', debounce(calcScrollHeight, 100));
+
+        // iOS PWA 模式下监听 visualViewport 变化
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', debounce(handleViewportResize, 150));
+        }
+
+        // 监听输入框 blur 事件，键盘收起后强制恢复布局
+        document.addEventListener('focusout', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
+                // 延迟执行，等待键盘完全收起
+                setTimeout(() => {
+                    if (initialVh > 0) {
+                        document.documentElement.style.setProperty('--vh', `${initialVh}px`);
+                    }
+                    calcScrollHeight();
+                }, 300);
+            }
+        });
 
         // Runtime stats 点击刷新
         const runtimeStats = $("runtimeStats");

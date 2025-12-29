@@ -146,6 +146,7 @@ func main() {
 
 	api := httpapi.New(signalBroker, history, httpapi.ParseAllowedOrigins(*corsOrigins))
 	api.PivotStatus = refresher
+	api.PivotStore = store
 	api.TickerStore = tickerStore
 	api.TickerMonitor = tickerMon
 	api.PatternBroker = patternBroker

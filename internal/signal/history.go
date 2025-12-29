@@ -192,8 +192,8 @@ func (h *History) Query(symbolContains, period, level, direction, source string,
 	if limit <= 0 {
 		limit = 200
 	}
-	if limit > 2000 {
-		limit = 2000
+	if limit > 4000 {
+		limit = 4000
 	}
 
 	symbolContains = strings.TrimSpace(symbolContains)
