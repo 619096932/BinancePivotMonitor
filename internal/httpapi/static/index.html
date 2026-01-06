@@ -1196,6 +1196,126 @@
                 gap: 10px
             }
         }
+
+        /* ==================== 宽屏多面板布局 ==================== */
+        /* 多面板容器 - 默认隐藏 */
+        .multi-panel-container {
+            display: none
+        }
+
+        /* 宽屏模式激活 (>1200px) */
+        @media (min-width: 1201px) {
+
+            /* 隐藏原有的 tab 按钮和单面板滚动区域 */
+            .tabs {
+                display: none !important
+            }
+
+            .scroll-area {
+                display: none !important
+            }
+
+            /* 调整 header-area 最大宽度 */
+            .header-area {
+                max-width: 1800px
+            }
+
+            /* 显示多面板容器 */
+            .multi-panel-container {
+                display: flex;
+                flex: 1;
+                gap: 12px;
+                padding: 0 12px 12px;
+                overflow: hidden;
+                max-width: 1800px;
+                margin: 0 auto;
+                width: 100%;
+                /* 为底部 footer 留出空间 */
+                padding-bottom: calc(50px + env(safe-area-inset-bottom))
+            }
+
+            /* 单个面板 */
+            .panel {
+                flex: 1;
+                min-width: 300px;
+                display: flex;
+                flex-direction: column;
+                background: var(--card);
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                overflow: hidden
+            }
+
+            /* 面板头部 */
+            .panel-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 10px 12px;
+                background: var(--vessel);
+                border-bottom: 1px solid var(--line);
+                flex-shrink: 0
+            }
+
+            .panel-title {
+                font-weight: 600;
+                font-size: 13px;
+                color: var(--text)
+            }
+
+            .panel-count {
+                font-size: 11px;
+                color: var(--text-secondary);
+                background: var(--tag-bg);
+                padding: 2px 8px;
+                border-radius: 4px
+            }
+
+            /* 面板滚动区域 */
+            .panel-scroll {
+                flex: 1;
+                overflow-y: auto;
+                overflow-x: hidden;
+                -webkit-overflow-scrolling: touch;
+                max-height: none !important;
+                height: auto !important
+            }
+
+            .panel-scroll .clusterize-content {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+                padding: 8px
+            }
+
+            /* 面板过滤控件 */
+            .panel-filters {
+                display: flex;
+                gap: 4px;
+                padding: 6px 8px;
+                background: var(--bg);
+                border-bottom: 1px solid var(--line);
+                flex-shrink: 0;
+                flex-wrap: wrap
+            }
+
+            .panel-select {
+                padding: 4px 6px;
+                font-size: 11px;
+                background: var(--vessel);
+                border: 1px solid var(--line);
+                border-radius: 4px;
+                color: var(--text);
+                cursor: pointer;
+                flex: 1;
+                min-width: 60px
+            }
+
+            .panel-select:focus {
+                outline: none;
+                border-color: var(--yellow)
+            }
+        }
     </style>
 </head>
 
@@ -1204,7 +1324,8 @@
     <div class="header-area">
         <header>
             <div class="title" data-i18n="app_title">枢轴监控</div>
-            <input id="symbol" type="text" class="header-search" placeholder="币种" data-i18n-placeholder="placeholder_symbol" />
+            <input id="symbol" type="text" class="header-search" placeholder="币种"
+                data-i18n-placeholder="placeholder_symbol" />
             <select id="langSelect" class="header-lang">
                 <option value="zh" data-i18n="lang_zh">中文</option>
                 <option value="en" data-i18n="lang_en">英文</option>
@@ -1247,9 +1368,11 @@
                     <option value="5000">5000</option>
                     <option value="10000">10000</option>
                 </select>
-                <input id="minDiff" type="number" class="input-sm" placeholder="差值%" data-i18n-placeholder="placeholder_diff" min="0" step="0.1" />
+                <input id="minDiff" type="number" class="input-sm" placeholder="差值%"
+                    data-i18n-placeholder="placeholder_diff" min="0" step="0.1" />
                 <div class="volume-filter">
-                    <input id="minVolume" type="number" class="input-sm" placeholder="成交额" data-i18n-placeholder="placeholder_vol" min="0" step="1" />
+                    <input id="minVolume" type="number" class="input-sm" placeholder="成交额"
+                        data-i18n-placeholder="placeholder_vol" min="0" step="1" />
                     <select id="volumeUnit" class="select-sm">
                         <option value="M" selected>M</option>
                         <option value="K">K</option>
@@ -1357,7 +1480,76 @@
             <button id="rankingRefresh" type="button" data-i18n="btn_refresh">刷新</button>
         </div>
     </div>
-    <!-- 滚动列表区域 -->
+    <!-- 宽屏多面板容器 (PC widescreen mode) -->
+    <div id="multiPanelContainer" class="multi-panel-container">
+        <!-- 信号面板 -->
+        <div class="panel signal-panel">
+            <div class="panel-header">
+                <span class="panel-title" data-i18n="panel_signals">信号</span>
+                <span class="panel-count" id="signalPanelCount">0</span>
+            </div>
+            <div id="wideSignalScroll" class="panel-scroll clusterize-scroll">
+                <div id="wideSignalList" class="clusterize-content"></div>
+            </div>
+        </div>
+        <!-- 成交额面板 -->
+        <div class="panel volume-panel">
+            <div class="panel-header">
+                <span class="panel-title" data-i18n="panel_volume">成交额</span>
+                <span class="panel-count" id="volumePanelCount">0</span>
+            </div>
+            <div class="panel-filters">
+                <select id="wideVolumeCompare" class="panel-select">
+                    <option value="" data-i18n="ranking_prev">上一快照</option>
+                    <option value="5m" data-i18n="ranking_5m">5分钟</option>
+                    <option value="15m" data-i18n="ranking_15m">15分钟</option>
+                    <option value="30m" data-i18n="ranking_30m">30分钟</option>
+                    <option value="1h" data-i18n="ranking_1h">1小时</option>
+                </select>
+                <select id="wideVolumeSort" class="panel-select">
+                    <option value="default" data-i18n="ranking_sort_default">默认</option>
+                    <option value="rank" data-i18n="ranking_sort_rank">排名</option>
+                    <option value="growth" data-i18n="ranking_sort_growth">增长%</option>
+                </select>
+                <select id="wideVolumeSortOrder" class="panel-select">
+                    <option value="asc" data-i18n="ranking_order_asc">正序</option>
+                    <option value="desc" data-i18n="ranking_order_desc">倒序</option>
+                </select>
+            </div>
+            <div id="wideVolumeScroll" class="panel-scroll clusterize-scroll">
+                <div id="wideVolumeList" class="clusterize-content"></div>
+            </div>
+        </div>
+        <!-- 成交笔数面板 -->
+        <div class="panel trades-panel">
+            <div class="panel-header">
+                <span class="panel-title" data-i18n="panel_trades">成交笔数</span>
+                <span class="panel-count" id="tradesPanelCount">0</span>
+            </div>
+            <div class="panel-filters">
+                <select id="wideTradesCompare" class="panel-select">
+                    <option value="" data-i18n="ranking_prev">上一快照</option>
+                    <option value="5m" data-i18n="ranking_5m">5分钟</option>
+                    <option value="15m" data-i18n="ranking_15m">15分钟</option>
+                    <option value="30m" data-i18n="ranking_30m">30分钟</option>
+                    <option value="1h" data-i18n="ranking_1h">1小时</option>
+                </select>
+                <select id="wideTradesSort" class="panel-select">
+                    <option value="default" data-i18n="ranking_sort_default">默认</option>
+                    <option value="rank" data-i18n="ranking_sort_rank">排名</option>
+                    <option value="growth" data-i18n="ranking_sort_growth">增长%</option>
+                </select>
+                <select id="wideTradesSortOrder" class="panel-select">
+                    <option value="asc" data-i18n="ranking_order_asc">正序</option>
+                    <option value="desc" data-i18n="ranking_order_desc">倒序</option>
+                </select>
+            </div>
+            <div id="wideTradesScroll" class="panel-scroll clusterize-scroll">
+                <div id="wideTradesList" class="clusterize-content"></div>
+            </div>
+        </div>
+    </div>
+    <!-- 滚动列表区域 (mobile/tablet mode) -->
     <div class="scroll-area">
         <div class="scroll-content">
             <div id="signalScroll" class="clusterize-scroll">
@@ -1427,7 +1619,8 @@
         <div class="action-menu-item" data-action="pivots" data-i18n="action_pivot_levels">📊 枢轴点位</div>
         <div class="action-menu-item" data-action="copy" data-i18n="action_copy_symbol">📋 复制币种</div>
         <div class="action-menu-item" data-action="filter" data-i18n="action_filter_symbol">🔍 筛选币种</div>
-        <div class="action-menu-item" data-action="signals" style="display:none" data-i18n="action_show_signals">📊 查看信号</div>
+        <div class="action-menu-item" data-action="signals" style="display:none" data-i18n="action_show_signals">📊 查看信号
+        </div>
     </div>
     <!-- Pivot Preview Modal -->
     <div id="pivotModal" class="pattern-modal" style="display:none">
@@ -1439,9 +1632,10 @@
             </div>
             <div class="modal-body" style="padding:8px 12px">
                 <div class="pivot-period-toggle">
-                    <button class="pivot-period-btn active" data-period="1d"
-                        onclick="switchPivotPeriod('1d')" data-i18n="pivot_period_day">日线</button>
-                    <button class="pivot-period-btn" data-period="1w" onclick="switchPivotPeriod('1w')" data-i18n="pivot_period_week">周线</button>
+                    <button class="pivot-period-btn active" data-period="1d" onclick="switchPivotPeriod('1d')"
+                        data-i18n="pivot_period_day">日线</button>
+                    <button class="pivot-period-btn" data-period="1w" onclick="switchPivotPeriod('1w')"
+                        data-i18n="pivot_period_week">周线</button>
                 </div>
                 <div id="pivotLevelsList" class="pivot-levels-list"></div>
             </div>

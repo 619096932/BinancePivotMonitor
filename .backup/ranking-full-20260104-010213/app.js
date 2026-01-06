@@ -78,9 +78,6 @@
             action_copy_symbol: "📋 复制币种",
             action_filter_symbol: "🔍 筛选币种",
             action_show_signals: "📊 查看信号",
-            panel_signals: "信号",
-            panel_volume: "成交额",
-            panel_trades: "成交笔数",
             pivot_levels_title: "枢轴点位",
             ranking_history_title: "排名历史",
             chart_volume_rank: "成交额排名（24h）",
@@ -212,9 +209,6 @@
             action_copy_symbol: "📋 Copy Symbol",
             action_filter_symbol: "🔍 Filter Symbol",
             action_show_signals: "📊 Show Signals",
-            panel_signals: "Signals",
-            panel_volume: "Volume",
-            panel_trades: "Trades",
             pivot_levels_title: "Pivot Levels",
             ranking_history_title: "Ranking History",
             chart_volume_rank: "Volume Rank (24h)",
@@ -455,23 +449,6 @@
     let patternCluster = null;
     let rankingCluster = null;
 
-    // ==================== 宽屏多面板模式 ====================
-    const WIDESCREEN_BREAKPOINT = 1200; // 宽屏断点
-    let isWidescreen = false; // 当前是否为宽屏模式
-
-    // 宽屏模式下的 Clusterize 实例
-    let wideSignalCluster = null;
-    let wideVolumeCluster = null;
-    let wideTradesCluster = null;
-
-    // 宽屏面板独立的过滤状态
-    let wideVolumeCompare = '';
-    let wideVolumeSort = 'default';
-    let wideVolumeSortOrder = 'asc';
-    let wideTradesCompare = '';
-    let wideTradesSort = 'default';
-    let wideTradesSortOrder = 'asc';
-
     // localStorage keys
     const STORAGE_KEYS = {
         soundLevels: "pivot_sound_levels",
@@ -638,11 +615,6 @@
         const filters = getFilters();
         filteredSignals = masterSignals.filter(s => matchSignal(s, filters));
         updateHint();
-
-        // 宽屏模式下同步更新信号面板
-        if (isWidescreen && wideSignalCluster) {
-            updateWideSignalPanel();
-        }
     }
 
     function updateHint() {
@@ -650,12 +622,6 @@
             $("hint").textContent = t("hint_patterns", {
                 filtered: filteredPatterns.length,
                 total: masterPatterns.length
-            });
-        } else if (isWidescreen) {
-            // 宽屏模式下显示信号计数
-            $("hint").textContent = t("hint_signals", {
-                filtered: filteredSignals.length,
-                total: masterSignals.length
             });
         } else {
             $("hint").textContent = t("hint_signals", {
@@ -951,150 +917,6 @@
         });
     }
 
-    // 初始化宽屏 Clusterize 实例
-    function initWidescreenClusters() {
-        if (wideSignalCluster) return; // 已初始化
-
-        wideSignalCluster = new Clusterize({
-            rows: [],
-            scrollId: 'wideSignalScroll',
-            contentId: 'wideSignalList',
-            rows_in_block: 15,
-            blocks_in_cluster: 4,
-            tag: null,
-            no_data_text: t("no_signals"),
-            no_data_class: 'clusterize-no-data',
-            callbacks: {
-                clusterChanged: function () {
-                    bindWideSignalEvents();
-                }
-            }
-        });
-
-        wideVolumeCluster = new Clusterize({
-            rows: [],
-            scrollId: 'wideVolumeScroll',
-            contentId: 'wideVolumeList',
-            rows_in_block: 15,
-            blocks_in_cluster: 4,
-            tag: null,
-            no_data_text: t("no_ranking"),
-            no_data_class: 'clusterize-no-data',
-            callbacks: {
-                clusterChanged: function () {
-                    bindWideVolumeEvents();
-                }
-            }
-        });
-
-        wideTradesCluster = new Clusterize({
-            rows: [],
-            scrollId: 'wideTradesScroll',
-            contentId: 'wideTradesList',
-            rows_in_block: 15,
-            blocks_in_cluster: 4,
-            tag: null,
-            no_data_text: t("no_ranking"),
-            no_data_class: 'clusterize-no-data',
-            callbacks: {
-                clusterChanged: function () {
-                    bindWideTradesEvents();
-                }
-            }
-        });
-    }
-
-    // 销毁宽屏 Clusterize 实例
-    function destroyWidescreenClusters() {
-        if (wideSignalCluster) {
-            wideSignalCluster.destroy();
-            wideSignalCluster = null;
-        }
-        if (wideVolumeCluster) {
-            wideVolumeCluster.destroy();
-            wideVolumeCluster = null;
-        }
-        if (wideTradesCluster) {
-            wideTradesCluster.destroy();
-            wideTradesCluster = null;
-        }
-    }
-
-    // ==================== 宽屏面板数据更新 ====================
-    // 更新所有宽屏面板
-    function updateWidescreenPanels() {
-        if (!isWidescreen) return;
-
-        // 更新信号面板
-        updateWideSignalPanel();
-
-        // 更新成交额面板
-        updateWideVolumePanel();
-
-        // 更新成交笔数面板
-        updateWideTradesPanel();
-    }
-
-    // 更新信号面板
-    function updateWideSignalPanel() {
-        if (!wideSignalCluster) return;
-
-        computeRanking();
-        // 注意：不要调用 applyFilters()，直接使用已过滤的数据，避免无限递归
-        const rows = filteredSignals.map((s, i) => renderSignalItem(s, i));
-        wideSignalCluster.update(rows);
-
-        // 更新计数
-        const countEl = $("signalPanelCount");
-        if (countEl) {
-            countEl.textContent = `${filteredSignals.length}/${masterSignals.length}`;
-        }
-    }
-
-    // 更新成交额面板
-    async function updateWideVolumePanel() {
-        if (!wideVolumeCluster) return;
-
-        try {
-            await loadRanking('volume', wideVolumeCompare);
-            const items = rankingData.volume || [];
-            const filtered = filterRankingItems(items);
-            const sorted = sortRankingItems(filtered, 'volume', wideVolumeSort, wideVolumeSortOrder);
-            const rows = sorted.map((item, i) => renderRankingItemFromAPI(item, i, 'volume'));
-            wideVolumeCluster.update(rows);
-
-            // 更新计数
-            const countEl = $("volumePanelCount");
-            if (countEl) {
-                countEl.textContent = String(filtered.length);
-            }
-        } catch (e) {
-            console.error('Failed to update volume panel:', e);
-        }
-    }
-
-    // 更新成交笔数面板
-    async function updateWideTradesPanel() {
-        if (!wideTradesCluster) return;
-
-        try {
-            await loadRanking('trades', wideTradesCompare);
-            const items = rankingData.trades || [];
-            const filtered = filterRankingItems(items);
-            const sorted = sortRankingItems(filtered, 'trades', wideTradesSort, wideTradesSortOrder);
-            const rows = sorted.map((item, i) => renderRankingItemFromAPI(item, i, 'trades'));
-            wideTradesCluster.update(rows);
-
-            // 更新计数
-            const countEl = $("tradesPanelCount");
-            if (countEl) {
-                countEl.textContent = String(filtered.length);
-            }
-        } catch (e) {
-            console.error('Failed to update trades panel:', e);
-        }
-    }
-
     function updateSignalList() {
         computeRanking();
         const rows = filteredSignals.map((s, i) => renderSignalItem(s, i));
@@ -1120,19 +942,17 @@
         });
     }
 
-    function sortRankingItems(items, type, customSort, customSortOrder) {
+    function sortRankingItems(items, type) {
         if (items.length === 0) {
             return items;
         }
-        const sort = customSort !== undefined ? customSort : rankingSort;
-        const sortOrder = customSortOrder !== undefined ? customSortOrder : rankingSortOrder;
-        if (sort === 'default') {
+        if (rankingSort === 'default') {
             return items;
         }
         const sorted = [...items];
-        const order = sortOrder === 'desc' ? -1 : 1;
-        const missingValue = sortOrder === 'desc' ? -Infinity : Infinity;
-        if (sort === 'growth') {
+        const order = rankingSortOrder === 'desc' ? -1 : 1;
+        const missingValue = rankingSortOrder === 'desc' ? -Infinity : Infinity;
+        if (rankingSort === 'growth') {
             const field = type === 'volume' ? 'volume_change' : 'trade_change';
             sorted.sort((a, b) => {
                 const av = typeof a[field] === "number" ? a[field] : missingValue;
@@ -1218,50 +1038,6 @@
                 ${priceChangeHtml}
             </div>
         `;
-    }
-
-    // ==================== 宽屏布局检测与切换 ====================
-    // 检测并更新布局模式
-    function checkWidescreenMode() {
-        const width = window.innerWidth;
-        // 防御性检查
-        if (!width || width <= 0) {
-            isWidescreen = false;
-            return;
-        }
-        const newIsWidescreen = width > WIDESCREEN_BREAKPOINT;
-        if (newIsWidescreen !== isWidescreen) {
-            isWidescreen = newIsWidescreen;
-            updateLayoutMode();
-        }
-    }
-
-    // 切换布局模式
-    function updateLayoutMode() {
-        const multiPanel = $("multiPanelContainer");
-        const scrollArea = document.querySelector(".scroll-area");
-        const tabs = document.querySelector(".tabs");
-
-        if (isWidescreen) {
-            // 切换到宽屏模式
-            if (multiPanel) multiPanel.style.display = 'flex';
-            if (scrollArea) scrollArea.style.display = 'none';
-            if (tabs) tabs.style.display = 'none';
-
-            // 初始化宽屏 Clusterize
-            initWidescreenClusters();
-
-            // 加载所有面板数据
-            updateWidescreenPanels();
-        } else {
-            // 切换到窄屏模式
-            if (multiPanel) multiPanel.style.display = 'none';
-            if (scrollArea) scrollArea.style.display = '';
-            if (tabs) tabs.style.display = '';
-
-            // 恢复原有视图
-            updateView();
-        }
     }
 
     function updateView() {
@@ -1493,47 +1269,6 @@
                 if (pattern) {
                     showPatternDetail(pattern);
                 }
-            };
-        });
-    }
-
-    // ==================== 宽屏面板事件绑定 ====================
-    function bindWideSignalEvents() {
-        initPivotObserver();
-
-        document.querySelectorAll("#wideSignalList .item").forEach(item => {
-            item.onclick = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                menuFromRanking = false;
-                showActionMenu(e, item.dataset.symbol);
-            };
-
-            // 观察可视状态以更新枢轴点位
-            if (pivotObserver) {
-                pivotObserver.observe(item);
-            }
-        });
-    }
-
-    function bindWideVolumeEvents() {
-        document.querySelectorAll("#wideVolumeList .ranking-item").forEach(item => {
-            item.onclick = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const symbol = item.dataset.symbol;
-                showRankingDetail(symbol);
-            };
-        });
-    }
-
-    function bindWideTradesEvents() {
-        document.querySelectorAll("#wideTradesList .ranking-item").forEach(item => {
-            item.onclick = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const symbol = item.dataset.symbol;
-                showRankingDetail(symbol);
             };
         });
     }
@@ -2049,11 +1784,6 @@
             applyFilters();
             applyPatternFilters();
             updateView();
-            // 宽屏模式下同步更新成交额和成交笔数面板
-            if (isWidescreen) {
-                updateWideVolumePanelLocal();
-                updateWideTradesPanelLocal();
-            }
         }, 200);
 
         $("symbol").oninput = debouncedFilter;
@@ -2126,79 +1856,6 @@
         }
 
         updateRankingSortControls();
-
-        // 宽屏面板过滤控件事件绑定
-        setupWidePanelFilters();
-    }
-
-    // 设置宽屏面板过滤控件
-    function setupWidePanelFilters() {
-        // 成交额面板过滤控件
-        const wideVolumeCompareEl = $("wideVolumeCompare");
-        const wideVolumeSortEl = $("wideVolumeSort");
-        const wideVolumeSortOrderEl = $("wideVolumeSortOrder");
-
-        if (wideVolumeCompareEl) {
-            wideVolumeCompareEl.onchange = () => {
-                wideVolumeCompare = wideVolumeCompareEl.value;
-                updateWideVolumePanel();
-            };
-        }
-        if (wideVolumeSortEl) {
-            wideVolumeSortEl.onchange = () => {
-                wideVolumeSort = wideVolumeSortEl.value || 'default';
-                updateWideVolumePanelLocal();
-            };
-        }
-        if (wideVolumeSortOrderEl) {
-            wideVolumeSortOrderEl.onchange = () => {
-                wideVolumeSortOrder = wideVolumeSortOrderEl.value || 'asc';
-                updateWideVolumePanelLocal();
-            };
-        }
-
-        // 成交笔数面板过滤控件
-        const wideTradesCompareEl = $("wideTradesCompare");
-        const wideTradesSortEl = $("wideTradesSort");
-        const wideTradesSortOrderEl = $("wideTradesSortOrder");
-
-        if (wideTradesCompareEl) {
-            wideTradesCompareEl.onchange = () => {
-                wideTradesCompare = wideTradesCompareEl.value;
-                updateWideTradesPanel();
-            };
-        }
-        if (wideTradesSortEl) {
-            wideTradesSortEl.onchange = () => {
-                wideTradesSort = wideTradesSortEl.value || 'default';
-                updateWideTradesPanelLocal();
-            };
-        }
-        if (wideTradesSortOrderEl) {
-            wideTradesSortOrderEl.onchange = () => {
-                wideTradesSortOrder = wideTradesSortOrderEl.value || 'asc';
-                updateWideTradesPanelLocal();
-            };
-        }
-    }
-
-    // 仅本地排序更新（不重新加载数据）
-    function updateWideVolumePanelLocal() {
-        if (!wideVolumeCluster) return;
-        const items = rankingData.volume || [];
-        const filtered = filterRankingItems(items);
-        const sorted = sortRankingItems(filtered, 'volume', wideVolumeSort, wideVolumeSortOrder);
-        const rows = sorted.map((item, i) => renderRankingItemFromAPI(item, i, 'volume'));
-        wideVolumeCluster.update(rows);
-    }
-
-    function updateWideTradesPanelLocal() {
-        if (!wideTradesCluster) return;
-        const items = rankingData.trades || [];
-        const filtered = filterRankingItems(items);
-        const sorted = sortRankingItems(filtered, 'trades', wideTradesSort, wideTradesSortOrder);
-        const rows = sorted.map((item, i) => renderRankingItemFromAPI(item, i, 'trades'));
-        wideTradesCluster.update(rows);
     }
 
     function setupPatternModal() {
@@ -2471,17 +2128,16 @@
     }
 
     // Load ranking data from backend API
-    async function loadRanking(type, customCompare) {
+    async function loadRanking(type) {
         try {
-            const compare = customCompare !== undefined ? customCompare : rankingCompare;
-            const compareParam = compare ? `&compare=${compare}` : '';
-            const r = await fetch(`/api/ranking/current?type=${type}${compareParam}`);
+            const compareParam = rankingCompare ? `&compare=${rankingCompare}` : '';
+            const r = await fetch(`/api/ranking/current?type=${type}&limit=100${compareParam}`);
             if (!r.ok) return;
             const data = await r.json();
             if (data && data.items) {
                 rankingData[type] = data.items;
-                // Update hint with timestamp info (only for narrow screen mode)
-                if (!isWidescreen && data.timestamp) {
+                // Update hint with timestamp info
+                if (data.timestamp) {
                     const ts = new Date(data.timestamp);
                     const compareTs = data.compare_to ? new Date(data.compare_to) : null;
                     const typeLabel = rankingTypeLabel(type);
@@ -2575,9 +2231,7 @@
 
                 // 重新过滤并更新视图
                 applyFilters();
-                if (isWidescreen) {
-                    updateWideSignalPanel();
-                } else if (currentView === 'signals') {
+                if (currentView === 'signals') {
                     updateSignalList();
                 }
             } catch (_) { }
@@ -2645,20 +2299,45 @@
 
     // 只更新可视区域的 DOM
     function updateVisibleItems() {
-        // 宽屏模式下更新宽屏信号面板
-        if (isWidescreen) {
-            document.querySelectorAll("#wideSignalList .item[data-symbol]").forEach(item => {
-                updateSignalItemTicker(item);
-            });
-            // 更新枢轴点预览 Modal（如果打开）
-            updatePivotPreviewIfOpen();
-            return;
-        }
-
         if (currentView === 'signals') {
             // 更新可视的信号项
             document.querySelectorAll("#signalList .item[data-symbol]").forEach(item => {
-                updateSignalItemTicker(item);
+                const symbol = item.dataset.symbol;
+                const ticker = tickerData.get(symbol);
+                if (!ticker) return;
+
+                const signalPrice = parseFloat(item.dataset.price) || 0;
+
+                // 更新价格差异
+                const subDiv = item.querySelector(".sub > div:first-child");
+                if (subDiv && signalPrice > 0) {
+                    const diff = ticker.last_price - signalPrice;
+                    const diffPct = (diff / signalPrice) * 100;
+                    const diffSign = diff >= 0 ? '+' : '';
+                    const diffClass = diff >= 0 ? 'up' : 'down';
+                    subDiv.innerHTML = `${t("label_signal")}: ${fmtPrice(signalPrice)} <span class="price-diff ${diffClass}">${diffSign}${diffPct.toFixed(2)}%</span>`;
+                }
+
+                // 更新 ticker 信息
+                let priceInfoEl = item.querySelector(".price-info");
+                if (!priceInfoEl) {
+                    priceInfoEl = document.createElement("div");
+                    priceInfoEl.className = "price-info";
+                    item.appendChild(priceInfoEl);
+                }
+
+                const pctClass = ticker.price_percent >= 0 ? 'up' : 'down';
+                priceInfoEl.innerHTML = `
+                    <span class="price-now">${fmtPrice(ticker.last_price)}</span>
+                    <span class="price-pct ${pctClass}">${fmtPct(ticker.price_percent)}</span>
+                    <span class="volume">${fmtVolume(ticker.quote_volume)}</span>
+                    <span class="trades">${fmtTradeCount(ticker.trade_count)} ${t("label_trades_unit")}</span>
+                `;
+
+                // 更新枢轴点位（仅可视项，使用同步版本）
+                if (visibleSymbols.has(symbol)) {
+                    updateItemPivotLevelsSync(item, symbol);
+                }
             });
 
             // 更新枢轴点预览 Modal（如果打开）
@@ -2666,46 +2345,6 @@
         } else {
             // 排行榜视图：重新计算并更新
             updateRankingList();
-        }
-    }
-
-    // 更新单个信号项的 ticker 信息
-    function updateSignalItemTicker(item) {
-        const symbol = item.dataset.symbol;
-        const ticker = tickerData.get(symbol);
-        if (!ticker) return;
-
-        const signalPrice = parseFloat(item.dataset.price) || 0;
-
-        // 更新价格差异
-        const subDiv = item.querySelector(".sub > div:first-child");
-        if (subDiv && signalPrice > 0) {
-            const diff = ticker.last_price - signalPrice;
-            const diffPct = (diff / signalPrice) * 100;
-            const diffSign = diff >= 0 ? '+' : '';
-            const diffClass = diff >= 0 ? 'up' : 'down';
-            subDiv.innerHTML = `${t("label_signal")}: ${fmtPrice(signalPrice)} <span class="price-diff ${diffClass}">${diffSign}${diffPct.toFixed(2)}%</span>`;
-        }
-
-        // 更新 ticker 信息
-        let priceInfoEl = item.querySelector(".price-info");
-        if (!priceInfoEl) {
-            priceInfoEl = document.createElement("div");
-            priceInfoEl.className = "price-info";
-            item.appendChild(priceInfoEl);
-        }
-
-        const pctClass = ticker.price_percent >= 0 ? 'up' : 'down';
-        priceInfoEl.innerHTML = `
-            <span class="price-now">${fmtPrice(ticker.last_price)}</span>
-            <span class="price-pct ${pctClass}">${fmtPct(ticker.price_percent)}</span>
-            <span class="volume">${fmtVolume(ticker.quote_volume)}</span>
-            <span class="trades">${fmtTradeCount(ticker.trade_count)} ${t("label_trades_unit")}</span>
-        `;
-
-        // 更新枢轴点位（仅可视项，使用同步版本）
-        if (visibleSymbols.has(symbol)) {
-            updateItemPivotLevelsSync(item, symbol);
         }
     }
 
@@ -2820,10 +2459,6 @@
         setupPatternModal();
         setupRankingModal();
         initClusterize();
-
-        // 宽屏模式检测
-        checkWidescreenMode();
-        window.addEventListener('resize', debounce(checkWidescreenMode, 150));
 
         // 延迟计算高度，确保 DOM 已渲染
         requestAnimationFrame(() => {

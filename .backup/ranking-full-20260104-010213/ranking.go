@@ -40,7 +40,7 @@ func parseCompareDuration(s string) (time.Duration, bool) {
 // Query params:
 //   - type: volume|trades (default: volume)
 //   - compare: 5m|15m|30m|1h|6h|24h (default: previous snapshot)
-//   - limit: int (default: 0 = all)
+//   - limit: int (default: 100)
 func (s *Server) handleRankingCurrent(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
@@ -76,7 +76,7 @@ func (s *Server) handleRankingCurrent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse limit parameter
-	limit := 0
+	limit := 100
 	if limitStr := q.Get("limit"); limitStr != "" {
 		if v, err := strconv.Atoi(limitStr); err == nil && v > 0 {
 			limit = v

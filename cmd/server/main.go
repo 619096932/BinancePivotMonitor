@@ -43,7 +43,7 @@ func main() {
 	// Read pattern recognition config from environment
 	patternEnabled := getEnvBool("PATTERN_ENABLED", true)
 	klineCount := getEnvInt("KLINE_COUNT", 12)
-	klineInterval := getEnvDurationOrMinutes("KLINE_INTERVAL", 5*time.Minute)
+	klineInterval := getEnvDurationOrMinutes("KLINE_INTERVAL", 15*time.Minute)
 	patternMinConfidence := getEnvInt("PATTERN_MIN_CONFIDENCE", 60) // Requirement 8: default 60
 	patternHistoryFile := os.Getenv("PATTERN_HISTORY_FILE")
 	if patternHistoryFile == "" {
